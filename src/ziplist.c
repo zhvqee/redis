@@ -910,6 +910,17 @@ unsigned char *__ziplistDelete(unsigned char *zl, unsigned char *p, unsigned int
     return zl;
 }
 
+/**
+ *
+ *
+ *   |32位ziplist的长度|32位 最后一个节点的偏移量|16位的节点个数|extry .....| 1字节的zlend ,值为254
+ *
+ * @param zl  压缩列表头指针
+ * @param p  插入的位置
+ * @param s   插入的字符串
+ * @param slen  插入的长度
+ * @return
+ */
 /* Insert item at "p". */
 unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned char *s, unsigned int slen) {
     size_t curlen = intrev32ifbe(ZIPLIST_BYTES(zl)), reqlen, newlen;
@@ -923,15 +934,19 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
     zlentry tail;
 
     /* Find out prevlen for the entry that is inserted. */
+    // 如果不是尾部插入的话，得到之前记录是用1字节记录大小，还是5字节自己了大小（用prevlensize记录）
+    //prevlen 记录先去entry的大小
     if (p[0] != ZIP_END) {
         ZIP_DECODE_PREVLEN(p, prevlensize, prevlen);
     } else {
+        // 原则上 ptail == p
         unsigned char *ptail = ZIPLIST_ENTRY_TAIL(zl);
         if (ptail[0] != ZIP_END) {
             prevlen = zipRawEntryLengthSafe(zl, curlen, ptail);
         }
     }
 
+    // 如果可以进行整数编码，否则为存入的长度，记reqlen
     /* See if the entry can be encoded */
     if (zipTryEncoding(s,slen,&value,&encoding)) {
         /* 'encoding' is set to the appropriate integer encoding */
@@ -1125,6 +1140,17 @@ unsigned char *ziplistMerge(unsigned char **first, unsigned char **second) {
     return target;
 }
 
+/***
+ *
+ *   |32位ziplist的长度|32位 最后一个节点的偏移量|16位的节点个数|extry .....| 1字节的zlend ,值为254
+ *
+ *
+ * @param zl
+ * @param s
+ * @param slen
+ * @param where
+ * @return
+ */
 unsigned char *ziplistPush(unsigned char *zl, unsigned char *s, unsigned int slen, int where) {
     unsigned char *p;
     p = (where == ZIPLIST_HEAD) ? ZIPLIST_ENTRY_HEAD(zl) : ZIPLIST_ENTRY_END(zl);
