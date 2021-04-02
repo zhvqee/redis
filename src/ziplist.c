@@ -699,7 +699,7 @@ static inline void zipAssertValidEntry(unsigned char* zl, size_t zlbytes, unsign
 
 /* Create a new empty ziplist. */
 unsigned char *ziplistNew(void) {
-    unsigned int bytes = ZIPLIST_HEADER_SIZE+ZIPLIST_END_SIZE;
+    unsigned int bytes = ZIPLIST_HEADER_SIZE+ZIPLIST_END_SIZE; // 32*2+16 + 8 =88
     unsigned char *zl = zmalloc(bytes);
     ZIPLIST_BYTES(zl) = intrev32ifbe(bytes);
     ZIPLIST_TAIL_OFFSET(zl) = intrev32ifbe(ZIPLIST_HEADER_SIZE);
