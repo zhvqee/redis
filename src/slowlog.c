@@ -112,9 +112,9 @@ void slowlogFreeEntry(void *septr) {
 /* Initialize the slow log. This function should be called a single time
  * at server startup. */
 void slowlogInit(void) {
-    server.slowlog = listCreate();
+    server.slowlog = listCreate(); // 创建有一个空的头结点
     server.slowlog_entry_id = 0;
-    listSetFreeMethod(server.slowlog,slowlogFreeEntry);
+    listSetFreeMethod(server.slowlog,slowlogFreeEntry); // 设置free 函数指针slowlogFreeEntry
 }
 
 /* Push a new entry into the slow log.

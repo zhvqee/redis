@@ -161,18 +161,77 @@ typedef void (dictScanBucketFunction)(void *privdata, dictEntry **bucketref);
 #endif
 
 /* API */
+
+
+
+ //                 |->dicthb[0](**table)->hashtable
+// dict->dicthb[2]--|
+//                  |->dicthb[1](**table)->hashtable
+
+/**
+ * 创建一个字典
+ * @param type
+ * @param privDataPtr
+ * @return
+ */
 dict *dictCreate(dictType *type, void *privDataPtr);
+
+/**
+ * 扩充hashtable
+ * @param d
+ * @param size
+ * @return
+ */
 int dictExpand(dict *d, unsigned long size);
+
+/**
+ * 扩充hashtable
+ * @param d
+ * @param size
+ * @return
+ */
 int dictTryExpand(dict *d, unsigned long size);
+
+/**
+ * 添加数据
+ * @param d
+ * @param key
+ * @param val
+ * @return
+ */
 int dictAdd(dict *d, void *key, void *val);
+
+
+/**
+ *
+ *
+ * 被dictAdd 调用
+ * @param d
+ * @param key
+ * @param existing
+ * @return
+ */
 dictEntry *dictAddRaw(dict *d, void *key, dictEntry **existing);
+
+
 dictEntry *dictAddOrFind(dict *d, void *key);
 int dictReplace(dict *d, void *key, void *val);
 int dictDelete(dict *d, const void *key);
 dictEntry *dictUnlink(dict *ht, const void *key);
 void dictFreeUnlinkedEntry(dict *d, dictEntry *he);
 void dictRelease(dict *d);
+
+/**
+ *
+ * 查找
+ * @param d
+ * @param key
+ * @return
+ */
 dictEntry * dictFind(dict *d, const void *key);
+
+
+
 void *dictFetchValue(dict *d, const void *key);
 int dictResize(dict *d);
 dictIterator *dictGetIterator(dict *d);
@@ -188,8 +247,25 @@ uint64_t dictGenCaseHashFunction(const unsigned char *buf, int len);
 void dictEmpty(dict *d, void(callback)(void*));
 void dictEnableResize(void);
 void dictDisableResize(void);
+
+/**
+ *
+ * rehash
+ * @param d
+ * @param n
+ * @return
+ */
 int dictRehash(dict *d, int n);
+
+/**
+ * rehash
+ * @param d
+ * @param ms
+ * @return
+ */
 int dictRehashMilliseconds(dict *d, int ms);
+
+
 void dictSetHashFunctionSeed(uint8_t *seed);
 uint8_t *dictGetHashFunctionSeed(void);
 unsigned long dictScan(dict *d, unsigned long v, dictScanFunction *fn, dictScanBucketFunction *bucketfn, void *privdata);

@@ -100,6 +100,16 @@ static inline size_t sdsTypeMaxSize(char type) {
  * You can print the string with printf() as there is an implicit \0 at the
  * end of the string. However the string is binary safe and can contain
  * \0 characters in the middle, as the length is stored in the sds header. */
+
+/**
+ *
+ *
+ * 创建一个字符串
+ * @param init
+ * @param initlen
+ * @param trymalloc
+ * @return
+ */
 sds _sdsnewlen(const void *init, size_t initlen, int trymalloc) {
     void *sh;
     sds s;
@@ -107,7 +117,7 @@ sds _sdsnewlen(const void *init, size_t initlen, int trymalloc) {
     /* Empty strings are usually created in order to append. Use type 8
      * since type 5 is not good at this. */
     if (type == SDS_TYPE_5 && initlen == 0) type = SDS_TYPE_8;
-    int hdrlen = sdsHdrSize(type);
+    int hdrlen = sdsHdrSize(type); //指定类型结构大小
     unsigned char *fp; /* flags pointer. */
     size_t usable;
 
@@ -121,7 +131,7 @@ sds _sdsnewlen(const void *init, size_t initlen, int trymalloc) {
     else if (!init)
         memset(sh, 0, hdrlen+initlen+1);
     s = (char*)sh+hdrlen;
-    fp = ((unsigned char*)s)-1;
+    fp = ((unsigned char*)s)-1; // flag 冲突
     usable = usable-hdrlen-1;
     if (usable > sdsTypeMaxSize(type))
         usable = sdsTypeMaxSize(type);

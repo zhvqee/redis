@@ -38,7 +38,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <limits.h>
-#include "dict.h"
+//#include "dict.h"
 
 /* -------------------------- private prototypes ---------------------------- */
 
@@ -101,6 +101,8 @@ static int dictExpand(dict *ht, unsigned long size) {
     _dictInit(&n, ht->type, ht->privdata);
     n.size = realsize;
     n.sizemask = realsize-1;
+
+    // 分配realsize这个 dictEntry* 指针大小的内容
     n.table = hi_calloc(realsize,sizeof(dictEntry*));
     if (n.table == NULL)
         return DICT_ERR;
@@ -144,14 +146,19 @@ static int dictAdd(dict *ht, void *key, void *val) {
 
     /* Get the index of the new element, or -1 if
      * the element already exists. */
+
+    // key 存在，-1，这里返回hashtable 下标
     if ((index = _dictKeyIndex(ht, key)) == -1)
         return DICT_ERR;
 
     /* Allocates the memory and stores key */
+
+    // 分配新节点内容
     entry = hi_malloc(sizeof(*entry));
     if (entry == NULL)
         return DICT_ERR;
 
+    // 插入hash链 头部插入
     entry->next = ht->table[index];
     ht->table[index] = entry;
 
@@ -331,6 +338,14 @@ static unsigned long _dictNextPower(unsigned long size) {
 /* Returns the index of a free slot that can be populated with
  * an hash entry for the given 'key'.
  * If the key already exists, -1 is returned. */
+
+/**
+ *
+ * hash table 查找，找到返回-1
+ * @param ht
+ * @param key
+ * @return
+ */
 static int _dictKeyIndex(dict *ht, const void *key) {
     unsigned int h;
     dictEntry *he;
@@ -339,6 +354,7 @@ static int _dictKeyIndex(dict *ht, const void *key) {
     if (_dictExpandIfNeeded(ht) == DICT_ERR)
         return -1;
     /* Compute the key hash value */
+    // 得到hash 取模
     h = dictHashKey(ht, key) & ht->sizemask;
     /* Search if this slot does not already contain the given key */
     he = ht->table[h];

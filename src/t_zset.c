@@ -68,6 +68,14 @@ int zslLexValueLteMax(sds value, zlexrangespec *spec);
 
 /* Create a skiplist node with the specified number of levels.
  * The SDS string 'ele' is referenced by the node after the call. */
+
+/**
+ * 创建一个跳表的节点
+ * @param level
+ * @param score
+ * @param ele
+ * @return
+ */
 zskiplistNode *zslCreateNode(int level, double score, sds ele) {
     zskiplistNode *zn =
         zmalloc(sizeof(*zn)+level*sizeof(struct zskiplistLevel));
@@ -77,6 +85,12 @@ zskiplistNode *zslCreateNode(int level, double score, sds ele) {
 }
 
 /* Create a new skiplist. */
+
+/**
+ *
+ * 创建一个跳表
+ * @return
+ */
 zskiplist *zslCreate(void) {
     int j;
     zskiplist *zsl;
@@ -129,7 +143,19 @@ int zslRandomLevel(void) {
 /* Insert a new node in the skiplist. Assumes the element does not already
  * exist (up to the caller to enforce that). The skiplist takes ownership
  * of the passed SDS string 'ele'. */
+
+/**
+ *
+ *
+ *
+ * 插入一个节点到跳表，
+ * @param zsl
+ * @param score
+ * @param ele
+ * @return
+ */
 zskiplistNode *zslInsert(zskiplist *zsl, double score, sds ele) {
+    // update 记录是插入节点层级指针的前驱节点指针
     zskiplistNode *update[ZSKIPLIST_MAXLEVEL], *x;
     unsigned int rank[ZSKIPLIST_MAXLEVEL];
     int i, level;
@@ -139,31 +165,41 @@ zskiplistNode *zslInsert(zskiplist *zsl, double score, sds ele) {
     for (i = zsl->level-1; i >= 0; i--) {
         /* store rank that is crossed to reach the insert position */
         rank[i] = i == (zsl->level-1) ? 0 : rank[i+1];
+
+        // 1 、当第i层水平指针不为空（代表可以从当前节点达到下一个节点,中间可能跨过多个节点），并且下一元素的分数小于当前插入节点的分数，
+        //指针x 沿着forward执行。
+        //2、或者当分数相等，但是 插入的元素与下一个元素比较小（根据字典序），则指针x 沿着forward执行。
         while (x->level[i].forward &&
                 (x->level[i].forward->score < score ||
                     (x->level[i].forward->score == score &&
-                    sdscmp(x->level[i].forward->ele,ele) < 0)))
-        {
+                    sdscmp(x->level[i].forward->ele,ele) < 0))){
+            //ran[i] 记录第i层的跨度。
             rank[i] += x->level[i].span;
             x = x->level[i].forward;
-        }
-        update[i] = x;
+        } // 这里找到第i层,插入的位置，i层后一个元素比插入元素大。
+        update[i] = x; // 记录第i层的插入位置，x在插入元素的前面
     }
     /* we assume the element is not already inside, since we allow duplicated
      * scores, reinserting the same element should never happen since the
      * caller of zslInsert() should test in the hash table if the element is
      * already inside or not. */
-    level = zslRandomLevel();
-    if (level > zsl->level) {
-        for (i = zsl->level; i < level; i++) {
+    level = zslRandomLevel(); // 获取插入元素的最高层。
+    if (level > zsl->level) { // 获取的层级比当前跳表保存的层级大，
+        for (i = zsl->level; i < level; i++) { // 从当前最大层级 level -> 要设置的最大层级
             rank[i] = 0;
             update[i] = zsl->header;
             update[i]->level[i].span = zsl->length;
         }
         zsl->level = level;
     }
+
+    // 创建一个跳表节点
     x = zslCreateNode(level,score,ele);
+
+    // 这里进入插入连接
     for (i = 0; i < level; i++) {
+
+        // 这里链表插入 x -> current-> next
         x->level[i].forward = update[i]->level[i].forward;
         update[i]->level[i].forward = x;
 
@@ -190,19 +226,21 @@ zskiplistNode *zslInsert(zskiplist *zsl, double score, sds ele) {
  * zslDeleteRangeByRank. */
 void zslDeleteNode(zskiplist *zsl, zskiplistNode *x, zskiplistNode **update) {
     int i;
+
     for (i = 0; i < zsl->level; i++) {
-        if (update[i]->level[i].forward == x) {
-            update[i]->level[i].span += x->level[i].span - 1;
-            update[i]->level[i].forward = x->level[i].forward;
+        if (update[i]->level[i].forward == x) { // 如果前驱的层级存在
+            update[i]->level[i].span += x->level[i].span - 1;// 跨度增加
+            update[i]->level[i].forward = x->level[i].forward; //直接指向删除的后继
         } else {
             update[i]->level[i].span -= 1;
         }
     }
-    if (x->level[0].forward) {
+    if (x->level[0].forward) {//如果0层的前驱层级，后继需要重新执行x的前驱
         x->level[0].forward->backward = x->backward;
     } else {
         zsl->tail = x->backward;
     }
+    // 层级需要ji
     while(zsl->level > 1 && zsl->header->level[zsl->level-1].forward == NULL)
         zsl->level--;
     zsl->length--;
