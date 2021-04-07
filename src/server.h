@@ -708,14 +708,43 @@ typedef struct clientReplyBlock {
 /* Redis database representation. There are multiple databases identified
  * by integers from 0 (the default database) up to the max configured
  * database. The database number is the 'id' field in the structure. */
+
+/**
+ * redis 数据库
+ */
 typedef struct redisDb {
+    /**
+     * key，hashtable
+     */
     dict *dict;                 /* The keyspace for this DB */
+
+    /**
+     *
+     * 有过期的key
+     */
     dict *expires;              /* Timeout of keys with a timeout set */
+    /**
+     * 阻塞key
+     */
     dict *blocking_keys;        /* Keys with clients waiting for data (BLPOP)*/
+
+    /**
+     *
+     * 注释key
+     */
     dict *ready_keys;           /* Blocked keys that received a PUSH */
+
+    /**
+     *
+     * 监听key
+     */
     dict *watched_keys;         /* WATCHED keys for MULTI/EXEC CAS */
     int id;                     /* Database ID */
     long long avg_ttl;          /* Average TTL, just for stats */
+
+    /**
+     * 循环过期key 的游标
+     */
     unsigned long expires_cursor; /* Cursor of the active expire cycle. */
     list *defrag_later;         /* List of key names to attempt to defrag one by one, gradually. */
 } redisDb;
@@ -1635,14 +1664,27 @@ typedef struct {
 typedef void redisCommandProc(client *c);
 typedef int redisGetKeysProc(struct redisCommand *cmd, robj **argv, int argc, getKeysResult *result);
 struct redisCommand {
+
+    // 命令名称
     char *name;
+    // 命令处理程序
     redisCommandProc *proc;
+    //参数数量
     int arity;
+
+    // flags 的描述
     char *sflags;   /* Flags as string representation, one char per flag. */
     uint64_t flags; /* The actual flags, obtained from the 'sflags' field. */
+
+
     /* Use a function to determine keys arguments in a command line.
      * Used for Redis Cluster redirect. */
+
+    // redis 集群key 重定向
     redisGetKeysProc *getkeys_proc;
+
+
+
     /* What keys should be loaded in background when calling this command? */
     int firstkey; /* The first argument that's a key (0 = no keys) */
     int lastkey;  /* The last argument that's a key */
@@ -2164,6 +2206,17 @@ void zsetConvert(robj *zobj, int encoding);
 void zsetConvertToZiplistIfNeeded(robj *zobj, size_t maxelelen);
 int zsetScore(robj *zobj, sds member, double *score);
 unsigned long zslGetRank(zskiplist *zsl, double score, sds o);
+/**
+ *
+ * zsetAdd  有序集合，底层通过跳表表实现
+ * @param zobj
+ * @param score
+ * @param ele
+ * @param in_flags
+ * @param out_flags
+ * @param newscore
+ * @return
+ */
 int zsetAdd(robj *zobj, double score, sds ele, int in_flags, int *out_flags, double *newscore);
 long zsetRank(robj *zobj, sds ele, int reverse);
 int zsetDel(robj *zobj, sds ele);

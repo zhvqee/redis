@@ -301,6 +301,8 @@ zskiplistNode *zslUpdateScore(zskiplist *zsl, double curscore, sds ele, double n
     /* We need to seek to element to update to start: this is useful anyway,
      * we'll have to update or remove it. */
     x = zsl->header;
+
+    // 找到需要更新的x
     for (i = zsl->level-1; i >= 0; i--) {
         while (x->level[i].forward &&
                 (x->level[i].forward->score < curscore ||
@@ -320,6 +322,13 @@ zskiplistNode *zslUpdateScore(zskiplist *zsl, double curscore, sds ele, double n
     /* If the node, after the score update, would be still exactly
      * at the same position, we can just update the score without
      * actually removing and re-inserting the element in the skiplist. */
+
+    /**
+     *
+     * 1、当跟新的x节点的前驱为null 或者 前驱的分值比新的分值要小
+     * &&
+     * 2、x的后继为null或者后继的分值大于新的分值。直接更新x的分值即可，不影响跳表的结构指针
+     */
     if ((x->backward == NULL || x->backward->score < newscore) &&
         (x->level[0].forward == NULL || x->level[0].forward->score > newscore))
     {
@@ -329,7 +338,9 @@ zskiplistNode *zslUpdateScore(zskiplist *zsl, double curscore, sds ele, double n
 
     /* No way to reuse the old node: we need to remove and insert a new
      * one at a different place. */
+    // 直接删除该节点
     zslDeleteNode(zsl, x, update);
+    // 然后重新插入该节点
     zskiplistNode *newnode = zslInsert(zsl,newscore,x->ele);
     /* We reused the old node x->ele SDS string, free the node now
      * since zslInsert created a new one. */
@@ -1313,7 +1324,22 @@ int zsetScore(robj *zobj, sds member, double *score) {
     }
     return C_OK;
 }
-
+/**
+ *
+ *
+ *  添加一个元素或者更新元素的分值到一个有序集合,有序集合有2中存储结构，1是压缩列表，2是(跳表+hashtable)
+ *
+ *  ZADD_INCR ： 增加元素的分值，不存在的元素，分值为0
+ *
+ *
+ * @param zobj
+ * @param score
+ * @param ele
+ * @param in_flags
+ * @param out_flags
+ * @param newscore
+ * @return
+ */
 /* Add a new element or update the score of an existing element in a sorted
  * set, regardless of its encoding.
  *
@@ -1324,6 +1350,8 @@ int zsetScore(robj *zobj, sds member, double *score) {
  * ZADD_INCR: Increment the current element score by 'score' instead of updating
  *            the current element score. If the element does not exist, we
  *            assume 0 as previous score.
+ *
+ *
  * ZADD_NX:   Perform the operation only if the element does not exist.
  * ZADD_XX:   Perform the operation only if the element already exist.
  * ZADD_GT:   Perform the operation on existing elements only if the new score is 
@@ -1370,12 +1398,14 @@ int zsetAdd(robj *zobj, double score, sds ele, int in_flags, int *out_flags, dou
     double curscore;
 
     /* NaN as input is an error regardless of all the other parameters. */
-    if (isnan(score)) {
+    if (isnan(score)) { // score 参数错误
         *out_flags = ZADD_OUT_NAN;
         return 0;
     }
 
     /* Update the sorted set according to its encoding. */
+
+    // 压缩列表
     if (zobj->encoding == OBJ_ENCODING_ZIPLIST) {
         unsigned char *eptr;
 
@@ -1403,6 +1433,7 @@ int zsetAdd(robj *zobj, double score, sds ele, int in_flags, int *out_flags, dou
                 /* GT? Only update if score is greater than current. */
                 (!gt || score > curscore)) 
             {
+                // 先删除原来的
                 zobj->ptr = zzlDelete(zobj->ptr,eptr);
                 zobj->ptr = zzlInsert(zobj->ptr,ele,score);
                 *out_flags |= ZADD_OUT_UPDATED;
@@ -1422,11 +1453,16 @@ int zsetAdd(robj *zobj, double score, sds ele, int in_flags, int *out_flags, dou
             *out_flags |= ZADD_OUT_NOP;
             return 1;
         }
+
+        // 跳表
     } else if (zobj->encoding == OBJ_ENCODING_SKIPLIST) {
+        // zset 结构
         zset *zs = zobj->ptr;
         zskiplistNode *znode;
         dictEntry *de;
 
+
+        // 首先在hashtable 上查找
         de = dictFind(zs->dict,ele);
         if (de != NULL) {
             /* NX? Return, same element already exists. */
@@ -1447,12 +1483,15 @@ int zsetAdd(robj *zobj, double score, sds ele, int in_flags, int *out_flags, dou
             }
 
             /* Remove and re-insert when score changes. */
+            //当分值变化的时候，需要重新插入
             if (score != curscore &&  
                 /* LT? Only update if score is less than current. */
                 (!lt || score < curscore) &&
                 /* GT? Only update if score is greater than current. */
                 (!gt || score > curscore)) 
             {
+
+                //更新跳表
                 znode = zslUpdateScore(zs->zsl,curscore,ele,score);
                 /* Note that we did not removed the original element from
                  * the hash table representing the sorted set, so we just
@@ -1461,9 +1500,10 @@ int zsetAdd(robj *zobj, double score, sds ele, int in_flags, int *out_flags, dou
                 *out_flags |= ZADD_OUT_UPDATED;
             }
             return 1;
-        } else if (!xx) {
-            ele = sdsdup(ele);
-            znode = zslInsert(zs->zsl,score,ele);
+        } else if (!xx) { // 元素不存
+            ele = sdsdup(ele); // 赋值一个
+            znode = zslInsert(zs->zsl,score,ele); // 插入跳表
+            // 插入到字典hashtable
             serverAssert(dictAdd(zs->dict,ele,&znode->score) == DICT_OK);
             *out_flags |= ZADD_OUT_ADDED;
             if (newscore) *newscore = score;
@@ -1577,6 +1617,7 @@ long zsetRank(robj *zobj, sds ele, int reverse) {
         zskiplist *zsl = zs->zsl;
         dictEntry *de;
         double score;
+
 
         de = dictFind(zs->dict,ele);
         if (de != NULL) {

@@ -37,6 +37,15 @@
 /* Check the length of a number of objects to see if we need to convert a
  * ziplist to a real hash. Note that we only check string encoded objects
  * as their string length can be queried in constant time. */
+
+/**
+ *
+ * 从 压缩列表 转换为hash
+ * @param o
+ * @param argv
+ * @param start
+ * @param end
+ */
 void hashTypeTryConversion(robj *o, robj **argv, int start, int end) {
     int i;
 
@@ -128,6 +137,14 @@ int hashTypeGetValue(robj *o, sds field, unsigned char **vstr, unsigned int *vle
  * interaction with the hash type outside t_hash.c.
  * The function returns NULL if the field is not found in the hash. Otherwise
  * a newly allocated string object with the value is returned. */
+
+/**
+ *
+ * 获取一个value 从hashTable
+ * @param o
+ * @param field
+ * @return
+ */
 robj *hashTypeGetValueObject(robj *o, sds field) {
     unsigned char *vstr;
     unsigned int vlen;
@@ -456,6 +473,12 @@ robj *hashTypeLookupWriteOrCreate(client *c, robj *key) {
     return o;
 }
 
+/**
+ *
+ * 压缩列表转 hash table
+ * @param o
+ * @param enc
+ */
 void hashTypeConvertZiplist(robj *o, int enc) {
     serverAssert(o->encoding == OBJ_ENCODING_ZIPLIST);
 
@@ -467,6 +490,7 @@ void hashTypeConvertZiplist(robj *o, int enc) {
         dict *dict;
         int ret;
 
+        // 初始化hashtable 迭代器
         hi = hashTypeInitIterator(o);
         dict = dictCreate(&hashDictType, NULL);
 
@@ -801,8 +825,10 @@ static void addHashFieldToReply(client *c, robj *o, sds field) {
 void hgetCommand(client *c) {
     robj *o;
 
+    // 查询
     if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.null[c->resp])) == NULL ||
         checkType(c,o,OBJ_HASH)) return;
+
 
     addHashFieldToReply(c, o, c->argv[2]->ptr);
 }

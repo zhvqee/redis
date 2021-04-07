@@ -59,6 +59,14 @@ void updateLFU(robj *val) {
 /* Low level key lookup API, not actually called directly from commands
  * implementations that should instead rely on lookupKeyRead(),
  * lookupKeyWrite() and lookupKeyReadWithFlags(). */
+
+/**
+ * 查询
+ * @param db
+ * @param key
+ * @param flags
+ * @return
+ */
 robj *lookupKey(redisDb *db, robj *key, int flags) {
     dictEntry *de = dictFind(db->dict,key->ptr);
     if (de) {
@@ -68,9 +76,12 @@ robj *lookupKey(redisDb *db, robj *key, int flags) {
          * Don't do it if we have a saving child, as this will trigger
          * a copy on write madness. */
         if (!hasActiveChildProcess() && !(flags & LOOKUP_NOTOUCH)){
+
             if (server.maxmemory_policy & MAXMEMORY_FLAG_LFU) {
+                // 更新lfu
                 updateLFU(val);
             } else {
+                // 这里更新lru 时钟
                 val->lru = LRU_CLOCK();
             }
         }
@@ -83,6 +94,7 @@ robj *lookupKey(redisDb *db, robj *key, int flags) {
 /* Lookup a key for read operations, or return NULL if the key is not found
  * in the specified DB.
  *
+ * 副作用
  * As a side effect of calling this function:
  * 1. A key gets expired if it reached it's TTL.
  * 2. The key last access time is updated.
@@ -102,6 +114,25 @@ robj *lookupKey(redisDb *db, robj *key, int flags) {
  * for read operations. Even if the key expiry is master-driven, we can
  * correctly report a key is expired on slaves even if the master is lagging
  * expiring our key via DELs in the replication link. */
+
+/**
+ *
+ *
+ * 调用该函数的副作用：
+ * 1、如果一个key 达到它的ttl，则就过期了
+ * 2、key 的访问access 时间被更新
+ * 3、全局keys 的是否命中状态被更新 INFO
+ * 4、如果通知开启，keymiss 通知将会触发
+ *
+ * 备注： 当一个key 逻辑上已过期但是实际存储在redis 上也是过期
+ *
+ *
+ *
+ * @param db
+ * @param key
+ * @param flags
+ * @return
+ */
 robj *lookupKeyReadWithFlags(redisDb *db, robj *key, int flags) {
     robj *val;
 
@@ -131,6 +162,7 @@ robj *lookupKeyReadWithFlags(redisDb *db, robj *key, int flags) {
             goto keymiss;
         }
     }
+    // 查找
     val = lookupKey(db,key,flags);
     if (val == NULL)
         goto keymiss;
@@ -1517,6 +1549,8 @@ int keyIsExpired(redisDb *db, robj *key) {
  * The return value of the function is 0 if the key is still valid,
  * otherwise the function returns 1 if the key is expired. */
 int expireIfNeeded(redisDb *db, robj *key) {
+
+    // 如果key 没有过期，直接返回0
     if (!keyIsExpired(db,key)) return 0;
 
     /* If we are running in the context of a slave, instead of
@@ -1527,19 +1561,28 @@ int expireIfNeeded(redisDb *db, robj *key) {
      * Still we try to return the right information to the caller,
      * that is, 0 if we think the key should be still valid, 1 if
      * we think the key is expired at this time. */
+
+    // 如果运行在slave 的redis 上（masterhost !=null），则直接返回1，代表key过期
     if (server.masterhost != NULL) return 1;
 
     /* If clients are paused, we keep the current dataset constant,
      * but return to the client what we believe is the right state. Typically,
      * at the end of the pause we will properly expire the key OR we will
      * have failed over and the new primary will send us the expire. */
+
+    // 停顿实际如果已达到，则直接返回1
     if (checkClientPauseTimeoutAndReturnIfPaused()) return 1;
+
+    // 否则删除过期key
+
 
     /* Delete the key */
     server.stat_expiredkeys++;
     propagateExpire(db,key,server.lazyfree_lazy_expire);
     notifyKeyspaceEvent(NOTIFY_EXPIRED,
         "expired",key,db->id);
+
+    // 同步删除，或者异步删除
     int retval = server.lazyfree_lazy_expire ? dbAsyncDelete(db,key) :
                                                dbSyncDelete(db,key);
     if (retval) signalModifiedKey(NULL,db,key);
