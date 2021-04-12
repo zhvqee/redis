@@ -2033,6 +2033,27 @@ void cronUpdateMemoryStats() {
  * a macro is used: run_with_period(milliseconds) { .... }
  */
 
+/**
+ *
+ *
+ * 时间时间处理
+ * 在这里我们要做许多需要异步完成的事情，这里的异步，其实还是在主线程上处理
+ *  1、活动的过期密钥收集(在查找时也以惰性方式执行)
+ *  2、 软 watchdog
+ *  3、更新一些统计数据
+ *  4、增量rehash db tables
+ *  5、触发 bgsave /aof 重写
+ *  6、客户端超时的不同场景
+ *  7、副本重链接
+ *  ....
+ * 这里直接调用的所有东西都将被称为server。因此，为了减少我们想要做的事情的执行频率，我们使用了一个宏 run_with_period
+ *
+ *
+ * @param eventLoop
+ * @param id
+ * @param clientData
+ * @return
+ */
 int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
     int j;
     UNUSED(eventLoop);
@@ -3288,6 +3309,11 @@ void initServer(void) {
     /* Create the timer callback, this is our way to process many background
      * operations incrementally, like clients timeout, eviction of unaccessed
      * expired keys and so forth. */
+
+    /**
+     *
+     * 时间事件
+     */
     if (aeCreateTimeEvent(server.el, 1, serverCron, NULL, NULL) == AE_ERR) {
         serverPanic("Can't create event loop timers.");
         exit(1);
@@ -6280,6 +6306,8 @@ int main(int argc, char **argv) {
     initServer();
     if (background || server.pidfile) createPidFile();
     if (server.set_proc_title) redisSetProcTitle(NULL);
+
+    // 打印logo
     redisAsciiArt();
     checkTcpBacklogSettings();
 

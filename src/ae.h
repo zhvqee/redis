@@ -97,16 +97,51 @@ typedef struct aeFiredEvent {
 
 /* State of an event based program */
 typedef struct aeEventLoop {
+    /**
+     *
+     * 下一个文件描述符
+     */
     int maxfd;   /* highest file descriptor currently registered */
+    /**
+     * 最大文件描述符处理
+     */
     int setsize; /* max number of file descriptors tracked */
+    /**
+     *  时间事件下一个ID
+     */
     long long timeEventNextId;
+    /**
+     *
+     * socket fd 注册
+     */
     aeFileEvent *events; /* Registered events */
+
+    /**
+     * 保存当前需要处理的可读，可写的socket 事件
+     */
     aeFiredEvent *fired; /* Fired events */
+
+    /**
+     * 时间事件
+     */
     aeTimeEvent *timeEventHead;
     int stop;
     void *apidata; /* This is used for polling API specific data */
+
+    /**
+     *
+     * epoll 之前调用
+     */
     aeBeforeSleepProc *beforesleep;
+    /**
+     *
+     * epoll 之后调用
+     */
     aeBeforeSleepProc *aftersleep;
+
+    /**
+     * 当前 可处理的事件类型 ，按位存储
+     */
     int flags;
 } aeEventLoop;
 

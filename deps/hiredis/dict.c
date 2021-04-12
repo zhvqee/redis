@@ -38,7 +38,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <limits.h>
-//#include "dict.h"
+#include "dict.h"
 
 /* -------------------------- private prototypes ---------------------------- */
 
