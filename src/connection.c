@@ -235,6 +235,14 @@ static int connSocketSetWriteHandler(connection *conn, ConnectionCallbackFunc fu
 /* Register a read handler, to be called when the connection is readable.
  * If NULL, the existing handler is removed.
  */
+
+/**
+ *
+ * 设置 读写请求函数给
+ * @param conn
+ * @param func
+ * @return
+ */
 static int connSocketSetReadHandler(connection *conn, ConnectionCallbackFunc func) {
     if (func == conn->read_handler) return C_OK;
 
@@ -251,6 +259,14 @@ static const char *connSocketGetLastError(connection *conn) {
     return strerror(conn->last_errno);
 }
 
+/**
+ *
+ * socket 事件处理器句柄
+ * @param el
+ * @param fd
+ * @param clientData
+ * @param mask
+ */
 static void connSocketEventHandler(struct aeEventLoop *el, int fd, void *clientData, int mask)
 {
     UNUSED(el);
