@@ -1860,10 +1860,10 @@ int processMultibulkBuffer(client *c) {
     }
 
     serverAssertWithInfo(c,NULL,c->multibulklen > 0);
-    while(c->multibulklen) {
+    while(c->multibulklen) { // 剩余的参数需要处理
         /* Read bulk length if unknown */
-        if (c->bulklen == -1) {
-            newline = strchr(c->querybuf+c->qb_pos,'\r');
+        if (c->bulklen == -1) {// 读取的参数个数未知
+            newline = strchr(c->querybuf+c->qb_pos,'\r'); // 查找'\r'
             if (newline == NULL) {
                 if (sdslen(c->querybuf)-c->qb_pos > PROTO_INLINE_MAX_SIZE) {
                     addReplyError(c,
@@ -2072,7 +2072,7 @@ void processInputBuffer(client *c) {
             }
         }
 
-        if (c->reqtype == PROTO_REQ_INLINE) {
+        if (c->reqtype == PROTO_REQ_INLINE) { //命令行 类型
             if (processInlineBuffer(c) != C_OK) break;
             /* If the Gopher mode and we got zero or one argument, process
              * the request in Gopher mode. To avoid data race, Redis won't
@@ -2086,7 +2086,7 @@ void processInputBuffer(client *c) {
                 c->flags |= CLIENT_CLOSE_AFTER_REPLY;
                 break;
             }
-        } else if (c->reqtype == PROTO_REQ_MULTIBULK) {
+        } else if (c->reqtype == PROTO_REQ_MULTIBULK) { // 客户端类型
             if (processMultibulkBuffer(c) != C_OK) break;
         } else {
             serverPanic("Unknown request type");
@@ -2274,6 +2274,14 @@ char *getClientSockname(client *c) {
 
 /* Concatenate a string representing the state of a client in a human
  * readable format, into the sds string 's'. */
+
+/**
+ *
+ * 以人类可读的格式将表示客户端状态的字符串连接到sds字符串's'中
+ * @param s
+ * @param client
+ * @return
+ */
 sds catClientInfoString(sds s, client *client) {
     char flags[16], events[3], conninfo[CONN_INFO_LEN], *p;
 
