@@ -107,6 +107,10 @@ static void clientSetDefaultAuth(client *c) {
                        !(c->user->flags & USER_FLAG_DISABLED);
 }
 
+/**
+ *
+ * 通过连接 创建客户端结构对象
+ */
 client *createClient(connection *conn) {
     client *c = zmalloc(sizeof(client));
 
@@ -115,11 +119,18 @@ client *createClient(connection *conn) {
      * in the context of a client. When commands are executed in other
      * contexts (for instance a Lua script) we need a non connected client. */
     if (conn) {
+        // 设置非阻塞socket
         connNonBlock(conn);
+        // 设置 非延迟发送，有数据立即发送
         connEnableTcpNoDelay(conn);
+
+        // 开启 SO_KEEPALIVE 特性
         if (server.tcpkeepalive)
             connKeepAlive(conn,server.tcpkeepalive);
+        //设置read 处理器（通过connSocketSetReadHandler）
         connSetReadHandler(conn, readQueryFromClient);
+
+        // 设置客户端数据
         connSetPrivateData(conn, c);
     }
 
@@ -1090,7 +1101,7 @@ void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
     UNUSED(mask);
     UNUSED(privdata);
 
-    while(max--) {
+    while(max--) { // fd 为监听的socket 
         cfd = anetTcpAccept(server.neterr, fd, cip, sizeof(cip), &cport);
         if (cfd == ANET_ERR) {
             if (errno != EWOULDBLOCK)
@@ -1849,10 +1860,10 @@ int processMultibulkBuffer(client *c) {
     }
 
     serverAssertWithInfo(c,NULL,c->multibulklen > 0);
-    while(c->multibulklen) {
+    while(c->multibulklen) { // 剩余的参数需要处理
         /* Read bulk length if unknown */
-        if (c->bulklen == -1) {
-            newline = strchr(c->querybuf+c->qb_pos,'\r');
+        if (c->bulklen == -1) {// 读取的参数个数未知
+            newline = strchr(c->querybuf+c->qb_pos,'\r'); // 查找'\r'
             if (newline == NULL) {
                 if (sdslen(c->querybuf)-c->qb_pos > PROTO_INLINE_MAX_SIZE) {
                     addReplyError(c,
@@ -2020,20 +2031,29 @@ int processPendingCommandsAndResetClient(client *c) {
  * more query buffer to process, because we read more data from the socket
  * or because a client was blocked and later reactivated, so there could be
  * pending query buffer, already representing a full command, to process. */
+/**
+ *
+ *
+ * 处理客户端传来的数据
+ * @param c
+ */
 void processInputBuffer(client *c) {
     /* Keep processing while there is something in the input buffer */
+    //当输入缓冲区中有东西时，继续处理,当前的处理位置 小于缓存的大小，则接着处理
     while(c->qb_pos < sdslen(c->querybuf)) {
         /* Immediately abort if the client is in the middle of something. */
         if (c->flags & CLIENT_BLOCKED) break;
 
         /* Don't process more buffers from clients that have already pending
          * commands to execute in c->argv. */
+        // 不需要处理了，因为解析解析的数据已经够处理命令了
         if (c->flags & CLIENT_PENDING_COMMAND) break;
 
         /* Don't process input from the master while there is a busy script
          * condition on the slave. We want just to accumulate the replication
          * stream (instead of replying -BUSY like we do with other clients) and
          * later resume the processing. */
+        //当从机的脚本繁忙时，不要处理从主机输入的信息。我们只需要积累复制流(而不是像处理其他客户端那样忙碌地回复)，然后继续处理
         if (server.lua_timedout && c->flags & CLIENT_MASTER) break;
 
         /* CLIENT_CLOSE_AFTER_REPLY closes the connection once the reply is
@@ -2052,7 +2072,7 @@ void processInputBuffer(client *c) {
             }
         }
 
-        if (c->reqtype == PROTO_REQ_INLINE) {
+        if (c->reqtype == PROTO_REQ_INLINE) { //命令行 类型
             if (processInlineBuffer(c) != C_OK) break;
             /* If the Gopher mode and we got zero or one argument, process
              * the request in Gopher mode. To avoid data race, Redis won't
@@ -2066,7 +2086,7 @@ void processInputBuffer(client *c) {
                 c->flags |= CLIENT_CLOSE_AFTER_REPLY;
                 break;
             }
-        } else if (c->reqtype == PROTO_REQ_MULTIBULK) {
+        } else if (c->reqtype == PROTO_REQ_MULTIBULK) { // 客户端类型
             if (processMultibulkBuffer(c) != C_OK) break;
         } else {
             serverPanic("Unknown request type");
@@ -2101,6 +2121,11 @@ void processInputBuffer(client *c) {
     }
 }
 
+/**
+ *
+ * 读取客户端的查询缓冲区内容
+ * @param conn
+ */
 void readQueryFromClient(connection *conn) {
     client *c = connGetPrivateData(conn);
     int nread, readlen;
@@ -2108,6 +2133,7 @@ void readQueryFromClient(connection *conn) {
 
     /* Check if we want to read from the client later when exiting from
      * the event loop. This is the case if threaded I/O is enabled. */
+    //检查是否希望在退出事件循环时从客户端读取数据。如果启用了线程I/O，就会出现这种情况。
     if (postponeClientRead(c)) return;
 
     /* Update total number of reads on server */
@@ -2132,7 +2158,11 @@ void readQueryFromClient(connection *conn) {
 
     qblen = sdslen(c->querybuf);
     if (c->querybuf_peak < qblen) c->querybuf_peak = qblen;
+
+    // 扩充
     c->querybuf = sdsMakeRoomFor(c->querybuf, readlen);
+
+    // 拼接
     nread = connRead(c->conn, c->querybuf+qblen, readlen);
     if (nread == -1) {
         if (connGetState(conn) == CONN_STATE_CONNECTED) {
@@ -2244,6 +2274,14 @@ char *getClientSockname(client *c) {
 
 /* Concatenate a string representing the state of a client in a human
  * readable format, into the sds string 's'. */
+
+/**
+ *
+ * 以人类可读的格式将表示客户端状态的字符串连接到sds字符串's'中
+ * @param s
+ * @param client
+ * @return
+ */
 sds catClientInfoString(sds s, client *client) {
     char flags[16], events[3], conninfo[CONN_INFO_LEN], *p;
 

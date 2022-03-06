@@ -679,6 +679,7 @@ void hsetCommand(client *c) {
     int i, created = 0;
     robj *o;
 
+    // 参数必定是偶数
     if ((c->argc % 2) == 1) {
         addReplyErrorFormat(c,"wrong number of arguments for '%s' command",c->cmd->name);
         return;

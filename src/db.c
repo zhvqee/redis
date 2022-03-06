@@ -606,6 +606,13 @@ long long dbTotalServerKeyCount() {
 
 /* Note that the 'c' argument may be NULL if the key was modified out of
  * a context of a client. */
+/**
+ *
+ * 发送信息，说明key 已被修改
+ * @param c
+ * @param db
+ * @param key
+ */
 void signalModifiedKey(client *c, redisDb *db, robj *key) {
     touchWatchedKey(db,key);
     trackingInvalidateKey(c,key);

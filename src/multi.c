@@ -169,6 +169,13 @@ void execCommand(client *c) {
         return;
     }
 
+    /**
+     * 检测是否需要中断执行exec 命令
+     *
+     * 1） watched key 已经修改 ， 返回bull
+     * 2) 先前的命令是错误的, 则是中断EXECABORT 错误
+     *
+     */
     /* Check if we need to abort the EXEC because:
      * 1) Some WATCHed key was touched.
      * 2) There was a previous error while queueing commands.
@@ -360,13 +367,17 @@ void touchWatchedKey(redisDb *db, robj *key) {
     listIter li;
     listNode *ln;
 
+    // 如果watched_key 为空，无这个watched key
     if (dictSize(db->watched_keys) == 0) return;
+
+    // 拉取监听这个key 的客户端
     clients = dictFetchValue(db->watched_keys, key);
     if (!clients) return;
 
     /* Mark all the clients watching this key as CLIENT_DIRTY_CAS */
     /* Check if we are already watching for this key */
     listRewind(clients,&li);
+    // 把这些客户端的标志置为dirty_cas
     while((ln = listNext(&li))) {
         client *c = listNodeValue(ln);
 

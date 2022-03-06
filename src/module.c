@@ -8176,10 +8176,20 @@ int RM_IsSubEventSupported(RedisModuleEvent event, int64_t subevent) {
  *
  * 'eid' and 'subid' are just the main event ID and the sub event associated
  * with the event, depending on what exactly happened. */
+/**
+ * 这是被Redis内部调用，每次我们想要触发一个事件，可以被某些模块拦截。指针'data'非常有用，
+ * 可以在需要时填充特定于事件的结构，以便向回调函数返回包含更多信息的结构。
+ * 'eid'和' subbid '只是主事件ID和与事件相关的子事件，具体取决于发生了什么。
+ * @param eid
+ * @param subid
+ * @param data
+ */
 void moduleFireServerEvent(uint64_t eid, int subid, void *data) {
     /* Fast path to return ASAP if there is nothing to do, avoiding to
      * setup the iterator and so forth: we want this call to be extremely
      * cheap if there are no registered modules. */
+    //如果无事可做，尽快返回的快速路径，避免设置迭代器等:如果没有注册的模块，我们希望这个调用非常便宜
+    // redis 模块事件监听列表
     if (listLength(RedisModule_EventListeners) == 0) return;
 
     int real_client_used = 0;
@@ -8188,7 +8198,10 @@ void moduleFireServerEvent(uint64_t eid, int subid, void *data) {
     listRewind(RedisModule_EventListeners,&li);
     while((ln = listNext(&li))) {
         RedisModuleEventListener *el = ln->value;
+        // 找到该事件的监听器RedisModuleEventListener，通过ID 查询
         if (el->event.id == eid) {
+
+            //初始化ctx，通过宏REDISMODULE_CTX_INIT
             RedisModuleCtx ctx = REDISMODULE_CTX_INIT;
             ctx.module = el->module;
 
@@ -8249,6 +8262,7 @@ void moduleFireServerEvent(uint64_t eid, int subid, void *data) {
 
             ModulesInHooks++;
             el->module->in_hook++;
+            //回调
             el->callback(&ctx,el->event,subid,moduledata);
             el->module->in_hook--;
             ModulesInHooks--;
