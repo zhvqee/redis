@@ -653,6 +653,7 @@ void loadServerConfig(char *filename, char config_from_stdin, char *options) {
                     filename, strerror(errno));
             exit(1);
         }
+        //C 库函数 char *fgets(char *str, int n, FILE *stream) 从指定的流 stream 读取一行，并把它存储在 str 所指向的字符串内。当读取 (n-1) 个字符时，或者读取到换行符时，或者到达文件末尾时，它会停止，具体视情况而定。
         while(fgets(buf,CONFIG_MAX_LINE+1,fp) != NULL)
             config = sdscat(config,buf);
         fclose(fp);

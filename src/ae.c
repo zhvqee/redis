@@ -69,11 +69,20 @@ aeEventLoop *aeCreateEventLoop(int setsize) {
 
     monotonicInit();    /* just in case the calling app didn't initialize */
 
+    // 创建eventLoop
     if ((eventLoop = zmalloc(sizeof(*eventLoop))) == NULL) goto err;
+
+    //创建events 大小setsize 个
     eventLoop->events = zmalloc(sizeof(aeFileEvent)*setsize);
+    //fired 大小setsize 个
     eventLoop->fired = zmalloc(sizeof(aeFiredEvent)*setsize);
+
+
     if (eventLoop->events == NULL || eventLoop->fired == NULL) goto err;
+
+    // 设置最大处理文件个数大小
     eventLoop->setsize = setsize;
+
     eventLoop->timeEventHead = NULL;
     eventLoop->timeEventNextId = 0;
     eventLoop->stop = 0;
@@ -81,6 +90,8 @@ aeEventLoop *aeCreateEventLoop(int setsize) {
     eventLoop->beforesleep = NULL;
     eventLoop->aftersleep = NULL;
     eventLoop->flags = 0;
+
+
     if (aeApiCreate(eventLoop) == -1) goto err;
     /* Events with mask == AE_NONE are not set. So let's initialize the
      * vector with it. */
@@ -203,10 +214,12 @@ int aeGetFileEvents(aeEventLoop *eventLoop, int fd) {
     return fe->mask;
 }
 
+//timer event  链表，
 long long aeCreateTimeEvent(aeEventLoop *eventLoop, long long milliseconds,
         aeTimeProc *proc, void *clientData,
         aeEventFinalizerProc *finalizerProc)
 {
+    //时间分配ID
     long long id = eventLoop->timeEventNextId++;
     aeTimeEvent *te;
 

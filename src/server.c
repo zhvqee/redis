@@ -1909,8 +1909,14 @@ void databasesCron(void) {
  * such info only when calling this function from serverCron() but not when
  * calling it from call(). */
 void updateCachedTime(int update_daylight_info) {
+
+    //微妙
     server.ustime = ustime();
+
+    //毫秒
     server.mstime = server.ustime / 1000;
+
+    // 秒
     time_t unixtime = server.mstime / 1000;
     atomicSet(server.unixtime, unixtime);
 
@@ -1919,7 +1925,7 @@ void updateCachedTime(int update_daylight_info) {
      * context is safe since we will never fork() while here, in the main
      * thread. The logging function will call a thread safe version of
      * localtime that has no locks. */
-    if (update_daylight_info) {
+    if (update_daylight_info) { // 夏令时
         struct tm tm;
         time_t ut = server.unixtime;
         localtime_r(&ut,&tm);
@@ -2627,9 +2633,14 @@ void createSharedObjects(void) {
 void initServerConfig(void) {
     int j;
 
+    // 保存时钟 cache
     updateCachedTime(1);
+
+    //函数生成的每次不同的一个唯一标识，不同Redis实例之间该runid是不同的，同一个Redis重启以后，其runid和之前的runid也是不同的
     getRandomHexChars(server.runid,CONFIG_RUN_ID_SIZE);
     server.runid[CONFIG_RUN_ID_SIZE] = '\0';
+
+
     changeReplicationId();
     clearReplicationId2();
     server.hz = CONFIG_DEFAULT_HZ; /* Initialize it ASAP, even if it may get
@@ -2680,6 +2691,7 @@ void initServerConfig(void) {
     atomicSet(server.lruclock,lruclock);
     resetServerSaveParams();
 
+    // rdb 保存条件 1小时更新1次， 5分钟，100保存1次，60秒操作10000,保存
     appendServerSaveParams(60*60,1);  /* save after 1 hour and 1 change */
     appendServerSaveParams(300,100);  /* save after 5 minutes and 100 changes */
     appendServerSaveParams(60,10000); /* save after 1 minute and 10000 changes */
@@ -2758,6 +2770,7 @@ void initServerConfig(void) {
      * Redis 5. However it is possible to revert it via redis.conf. */
     server.lua_always_replicate_commands = 1;
 
+    // 初始化配置值
     initConfigValues();
 }
 
@@ -3181,6 +3194,8 @@ void initServer(void) {
     adjustOpenFilesLimit();
     const char *clk_msg = monotonicInit();
     serverLog(LL_NOTICE, "monotonic clock: %s", clk_msg);
+
+    // 创建 evenloop  1024-32+32+96
     server.el = aeCreateEventLoop(server.maxclients+CONFIG_FDSET_INCR);
     if (server.el == NULL) {
         serverLog(LL_WARNING,
@@ -3288,6 +3303,10 @@ void initServer(void) {
     /* Create the timer callback, this is our way to process many background
      * operations incrementally, like clients timeout, eviction of unaccessed
      * expired keys and so forth. */
+
+    /**
+     * 创建timer event
+     */
     if (aeCreateTimeEvent(server.el, 1, serverCron, NULL, NULL) == AE_ERR) {
         serverPanic("Can't create event loop timers.");
         exit(1);
@@ -6146,12 +6165,18 @@ int main(int argc, char **argv) {
 #ifdef INIT_SETPROCTITLE_REPLACEMENT
     spt_init(argc, argv);
 #endif
+    // 设置或读取地域化信息。LC_COLLATE:影响字符比较（字符排序），具体来说就是影响 <string.h> 头文件中的 strcoll() 和 strxfrm() 函数。
     setlocale(LC_COLLATE,"");
     tzset(); /* Populates 'timezone' global. */
     zmalloc_set_oom_handler(redisOutOfMemoryHandler);
+    //srand 函数是随机数发生器的初始化函数。->rand()
     srand(time(NULL)^getpid());
+    //srandom 函数是随机数发生器的初始化函数。 ->random
     srandom(time(NULL)^getpid());
+    //获取启动时间
     gettimeofday(&tv,NULL);
+
+    // 生成随机数算法
     init_genrand64(((long long) tv.tv_sec * 1000000 + tv.tv_usec) ^ getpid());
     crc64_init();
 
@@ -6159,12 +6184,18 @@ int main(int argc, char **argv) {
      * to reset it and restore it back. We do this early to avoid a potential
      * race condition with threads that could be creating files or directories.
      */
+    //在使用open()建立新文件时，该参数mode并非真正建立文件的权限，而是(mode&~umask)的权限值。例如，在建立文件时指定文件权限为0666,通常umask值默认为022,则该文件的真正权限则为0666&~022=0644,也就是rw-r-r--。
     umask(server.umask = umask(0777));
 
     uint8_t hashseed[16];
+    // 初始化随机种子
     getRandomBytes(hashseed,sizeof(hashseed));
     dictSetHashFunctionSeed(hashseed);
+
+    // 看启动是否是哨兵
     server.sentinel_mode = checkForSentinelMode(argc,argv);
+
+
     initServerConfig();
     ACLInit(); /* The ACL subsystem must be initialized ASAP because the
                   basic networking code and client creation depends on it. */
@@ -6252,6 +6283,7 @@ int main(int argc, char **argv) {
                 "Sentinel needs config file on disk to save state.  Exiting...");
             exit(1);
         }
+        // 加载配置
         loadServerConfig(server.configfile, config_from_stdin, options);
         if (server.sentinel_mode) loadSentinelConfigFromQueue();
         sdsfree(options);

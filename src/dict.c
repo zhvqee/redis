@@ -72,6 +72,7 @@ static int _dictInit(dict *ht, dictType *type, void *privDataPtr);
 
 static uint8_t dict_hash_function_seed[16];
 
+// 设置 dict set hash 函数随机粽子
 void dictSetHashFunctionSeed(uint8_t *seed) {
     memcpy(dict_hash_function_seed, seed, sizeof(dict_hash_function_seed));
 }
