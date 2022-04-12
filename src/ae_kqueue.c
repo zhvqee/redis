@@ -121,6 +121,8 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
         int j;
 
         numevents = retval;
+
+        // 这里就是把 当前 处于要出去的时间放到fired 数组中，到函数返回的后面就可以对fired[]数组进行处理
         for(j = 0; j < numevents; j++) {
             int mask = 0;
             struct kevent *e = state->events+j;

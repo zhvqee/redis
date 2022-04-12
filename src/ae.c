@@ -165,6 +165,15 @@ void aeStop(aeEventLoop *eventLoop) {
     eventLoop->stop = 1;
 }
 
+/**
+ * 创建 event 事件的时候 会对 events 进行 处理函数设置 和 mask 设置
+ * @param eventLoop
+ * @param fd
+ * @param mask
+ * @param proc
+ * @param clientData
+ * @return
+ */
 int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask,
         aeFileProc *proc, void *clientData)
 {
@@ -174,6 +183,7 @@ int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask,
     }
     aeFileEvent *fe = &eventLoop->events[fd];
 
+    //把fd 放到 epoll 的 epoll_wait 下监听
     if (aeApiAddEvent(eventLoop, fd, mask) == -1)
         return AE_ERR;
     fe->mask |= mask;
@@ -464,6 +474,7 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
             tvp = &tv;
         }
 
+        //这里就会处理IO多线程解析客户端的数据
         if (eventLoop->beforesleep != NULL && flags & AE_CALL_BEFORE_SLEEP)
             eventLoop->beforesleep(eventLoop);
 
@@ -485,12 +496,21 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
          * 循环处理socket fd
          */
         for (j = 0; j < numevents; j++) {
+
+            //eventLoop->events 在创建eventLoop的时候初始化的，
+            // 然后当有个socket 连接时，就会被放到这个数组下
+            //那是什么时候被放进来的呢，
             aeFileEvent *fe = &eventLoop->events[eventLoop->fired[j].fd];
             int mask = eventLoop->fired[j].mask;
             int fd = eventLoop->fired[j].fd;
             int fired = 0; /* Number of events fired for current fd. */
 
             /*
+             *
+             * 对于WRITABLE，如果READABLE事件已经在同一事件循环迭代中触发，则不要触发该事件。
+             * 当您希望在发送回复之前将内容持久化到磁盘，并且希望以组的方式执行时，这很有用。
+             *
+             *
              * 通常我们先执行可读事件接着再执行可写事件
              * 这样我们可能可以更快速的查询
              *

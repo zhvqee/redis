@@ -2176,7 +2176,12 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
         for (j = 0; j < server.saveparamslen; j++) {
             struct saveparam *sp = server.saveparams+j;
 
-            /* Save if we reached the given amount of changes,
+            /*
+             *  持久化 ，
+             *  rdb 保存条件 1小时更新1次， 5分钟，100保存1次，60秒操作10000,达到时
+             *
+             *
+             * Save if we reached the given amount of changes,
              * the given amount of seconds, and if the latest bgsave was
              * successful or if, in case of an error, at least
              * CONFIG_BGSAVE_RETRY_DELAY seconds already elapsed. */
@@ -2265,7 +2270,9 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
      * the operation even if completely idle. */
     if (server.tracking_clients) trackingLimitUsedSlots();
 
-    /* Start a scheduled BGSAVE if the corresponding flag is set. This is
+    /*
+     * 异步调用bgSave
+     * Start a scheduled BGSAVE if the corresponding flag is set. This is
      * useful when we are forced to postpone a BGSAVE because an AOF
      * rewrite is in progress.
      *
@@ -3031,6 +3038,14 @@ void closeSocketListeners(socketFds *sfd) {
 
 /* Create an event handler for accepting new connections in TCP or TLS domain sockets.
  * This works atomically for all socket fds */
+
+/**
+ *
+ * 接收连接
+ * @param sfd
+ * @param accept_handler
+ * @return
+ */
 int createSocketAcceptHandler(socketFds *sfd, aeFileProc *accept_handler) {
     int j;
 
@@ -3227,6 +3242,7 @@ void initServer(void) {
     server.db = zmalloc(sizeof(redisDb)*server.dbnum);
 
     /* Open the TCP listening socket for the user commands. */
+   // 这里创建 了 服务端socket 并存储在server.ipfd.
     if (server.port != 0 &&
         listenToPort(server.port,&server.ipfd) == C_ERR) {
         serverLog(LL_WARNING, "Failed listening on port %u (TCP), aborting.", server.port);
@@ -3340,6 +3356,14 @@ void initServer(void) {
 
     /* Create an event handler for accepting new connections in TCP and Unix
      * domain sockets. */
+
+    /**
+     *
+     *
+     *  这里就是创建吧 服务端的 socket 给 io多路复用函数，进行监听，并设置的回调函数时acceptTcpHandler，
+     *
+     *
+     */
     if (createSocketAcceptHandler(&server.ipfd, acceptTcpHandler) != C_OK) {
         serverPanic("Unrecoverable error creating TCP socket accept handler.");
     }
@@ -3361,6 +3385,7 @@ void initServer(void) {
 
     /* Register before and after sleep handlers (note this needs to be done
      * before loading persistence since it is used by processEventsWhileBlocked. */
+
     aeSetBeforeSleepProc(server.el,beforeSleep);
     aeSetAfterSleepProc(server.el,afterSleep);
 
@@ -4089,7 +4114,10 @@ int processCommand(client *c) {
         }
     }
 
-    /* Handle the maxmemory directive.
+    /*
+     *  处理最大内存
+     *
+     * Handle the maxmemory directive.
      *
      * Note that we do not want to reclaim memory if we are here re-entering
      * the event loop since there is a busy Lua script running in timeout
@@ -6335,6 +6363,8 @@ int main(int argc, char **argv) {
     }
 
     readOOMScoreAdj();
+    // 这里会设置beforeSleep 函数，即内部执行的是handleClientsWithPendingReadsUsingThreads，
+    // beforeSleep 会在aeMain 时被调用
     initServer();
     if (background || server.pidfile) createPidFile();
     if (server.set_proc_title) redisSetProcTitle(NULL);
@@ -6408,6 +6438,11 @@ int main(int argc, char **argv) {
     redisSetCpuAffinity(server.server_cpulist);
     setOOMScoreAdj(-1);
 
+
+
+    /**
+     *  这里是 事件驱动框架的开始
+     */
     aeMain(server.el);
     aeDeleteEventLoop(server.el);
     return 0;

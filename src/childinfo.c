@@ -125,7 +125,17 @@ void updateChildInfo(childInfoType information_type, size_t cow, monotime cow_up
         server.stat_module_cow_bytes = cow;
     }
 }
-
+/**
+ *
+ *   从管道中读取 多线程IO的数据，如果读取完成，会把数据放入到buffer， 返回1
+ *   否则，部分数据已经在buffer中，接着读取，知道为0。
+ * @param information_type
+ * @param cow
+ * @param cow_updated
+ * @param keys
+ * @param progress
+ * @return
+ */
 /* Read child info data from the pipe.
  * if complete data read into the buffer, 
  * data is stored into *buffer, and returns 1.

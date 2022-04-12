@@ -81,8 +81,10 @@ struct __attribute__ ((__packed__)) sdshdr64 {
 #define SDS_TYPE_MASK 7
 #define SDS_TYPE_BITS 3
 #define SDS_HDR_VAR(T,s) struct sdshdr##T *sh = (void*)((s)-(sizeof(struct sdshdr##T)));
+// 获取头部指针，sds 变量指针指向的字符串缓冲区位置，其指针头部前面还有值
 #define SDS_HDR(T,s) ((struct sdshdr##T *)((s)-(sizeof(struct sdshdr##T))))
 #define SDS_TYPE_5_LEN(f) ((f)>>SDS_TYPE_BITS)
+
 
 static inline size_t sdslen(const sds s) {
     unsigned char flags = s[-1];
@@ -100,7 +102,10 @@ static inline size_t sdslen(const sds s) {
     }
     return 0;
 }
-
+/**
+ * 
+ *  判断目前的容量是否够，大于>0代码足够
+ **/
 static inline size_t sdsavail(const sds s) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
@@ -151,6 +156,12 @@ static inline void sdssetlen(sds s, size_t newlen) {
     }
 }
 
+/**
+ * @brief 
+ *  把s字符串的len 字段+ inc
+ * @param s 
+ * @param inc 
+ */
 static inline void sdsinclen(sds s, size_t inc) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {

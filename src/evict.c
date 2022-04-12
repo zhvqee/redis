@@ -72,7 +72,14 @@ unsigned int getLRUClock(void) {
     return (mstime()/LRU_CLOCK_RESOLUTION) & LRU_CLOCK_MAX;
 }
 
-/* This function is used to obtain the current LRU clock.
+/*
+ *  该函数的功能是获取一个当前的LRU 时钟，
+ *  如果频率执行小于1000ms 时，采用固定值
+ *  否则进行系统调用
+ *  如果当前分辨率低于频率，我们刷新LRU时钟(它应该在生产服务器中)
+ *
+ *
+ * This function is used to obtain the current LRU clock.
  * If the current resolution is lower than the frequency we refresh the
  * LRU clock (as it should be in production servers) we return the
  * precomputed value, otherwise we need to resort to a system call. */
@@ -98,7 +105,9 @@ unsigned long long estimateObjectIdleTime(robj *o) {
     }
 }
 
-/* LRU approximation algorithm
+/*
+ *
+ * LRU approximation algorithm
  *
  * Redis uses an approximation of the LRU algorithm that runs in constant
  * memory. Every time there is a key to expire, we sample N keys (with
@@ -119,6 +128,10 @@ unsigned long long estimateObjectIdleTime(robj *o) {
  * evicted in the whole database. */
 
 /* Create a new eviction pool. */
+
+/**
+ * 创建一个 淘汰池，通过EvictionPoolLRU 指定
+ */
 void evictionPoolAlloc(void) {
     struct evictionPoolEntry *ep;
     int j;
@@ -324,7 +337,10 @@ unsigned long LFUDecrAndReturn(robj *o) {
     return counter;
 }
 
-/* We don't want to count AOF buffers and slaves output buffers as
+/*
+ * redis 统计已使用的内存不包括 AOF 缓存区和主从同步缓存区。
+ *
+ * We don't want to count AOF buffers and slaves output buffers as
  * used memory: the eviction should use mostly data size. This function
  * returns the sum of AOF and slaves buffer. */
 size_t freeMemoryGetNotCountedMemory(void) {
@@ -485,7 +501,11 @@ static unsigned long evictionTimeLimitUs() {
     return ULONG_MAX;   /* No limit to eviction time */
 }
 
-/* Check that memory usage is within the current "maxmemory" limit.  If over
+/*
+ *   获取最大内存使用情况，如果超过maxMemory，则尝试去剔除数据 performEvictions
+ *
+ *
+ * Check that memory usage is within the current "maxmemory" limit.  If over
  * "maxmemory", attempt to free memory by evicting data (if it's safe to do so).
  *
  * It's possible for Redis to suddenly be significantly over the "maxmemory"
@@ -555,6 +575,11 @@ int performEvictions(void) {
                 /* We don't want to make local-db choices when expiring keys,
                  * so to start populate the eviction pool sampling keys from
                  * every DB. */
+
+                /**
+                 *
+                 * 这里根据淘汰的策略选择是全部的字典还是设置过期的字段
+                 */
                 for (i = 0; i < server.dbnum; i++) {
                     db = server.db+i;
                     dict = (server.maxmemory_policy & MAXMEMORY_FLAG_ALLKEYS) ?

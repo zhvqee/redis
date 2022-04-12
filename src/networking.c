@@ -211,6 +211,13 @@ client *createClient(connection *conn) {
  * handleClientsWithPendingWrites() function).
  * If we fail and there is more data to write, compared to what the socket
  * buffers can hold, then we'll really install the handler. */
+
+/**
+ * 条件一：客户端没有设置过 CLIENT_PENDING_WRITE 标识，即没有被推迟过执行写操作。
+ * 条件二：客户端所在实例没有进行主从复制，或者客户端所在实例是主从复制中的从节点，
+ *        但全量复制的 RDB 文件已经传输完成，客户端可以接收请求。
+ * @param c
+ */
 void clientInstallWriteHandler(client *c) {
     /* Schedule the client to write the output buffers to the socket only
      * if not already done and, for slaves, if the slave can actually receive
@@ -252,6 +259,14 @@ void clientInstallWriteHandler(client *c) {
  * Typically gets called every time a reply is built, before adding more
  * data to the clients output buffers. If the function returns C_ERR no
  * data should be appended to the output buffers. */
+/**
+ *
+ *
+ *   推迟写会数据给客户端。
+ *
+ * @param c
+ * @return
+ */
 int prepareClientToWrite(client *c) {
     /* If it's the Lua client we always return ok without installing any
      * handler since there is no socket at all. */
@@ -1041,6 +1056,7 @@ static void acceptCommonHandler(connection *conn, int flags, char *ip) {
      * Admission control will happen before a client is created and connAccept()
      * called, because we don't want to even start transport-level negotiation
      * if rejected. */
+    // 限制最大连接数
     if (listLength(server.clients) + getClusterConnectionsCount()
         >= server.maxclients)
     {
@@ -1063,6 +1079,12 @@ static void acceptCommonHandler(connection *conn, int flags, char *ip) {
     }
 
     /* Create connection and client */
+    /**
+     *
+     *  通过 clientFd -->封装为 connnection 对象-->在封装为client 对象
+     *  createClient 这里会设置readQueryFromClient ，用来读取客户端发来的数据
+     *
+     */
     if ((c = createClient(conn)) == NULL) {
         serverLog(LL_WARNING,
             "Error registering fd event for the new client: %s (conn: %s)",
@@ -1111,6 +1133,9 @@ void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
         }
         anetCloexec(cfd);
         serverLog(LL_VERBOSE,"Accepted %s:%d", cip, cport);
+        /**
+         * connCreateAcceptedSocket 把 clientFd -> 封装为 connection 对象
+         */
         acceptCommonHandler(connCreateAcceptedSocket(cfd),0,cip);
     }
 }
@@ -2099,6 +2124,11 @@ void processInputBuffer(client *c) {
             /* If we are in the context of an I/O thread, we can't really
              * execute the command here. All we can do is to flag the client
              * as one that needs to process the command. */
+
+            /**
+             * 如果这里是IO 线程执行的话，那么客户端必定带有CLIENT_PENDING_READ标记
+             * 所以这里设置为标记接着设置CLIENT_PENDING_COMMAND
+             */
             if (c->flags & CLIENT_PENDING_READ) {
                 c->flags |= CLIENT_PENDING_COMMAND;
                 break;
@@ -2123,6 +2153,8 @@ void processInputBuffer(client *c) {
 
 /**
  *
+ *  这个函数在主I0线程和 多线程的IO 线程都会调用
+ *
  * 读取客户端的查询缓冲区内容
  * @param conn
  */
@@ -2146,6 +2178,10 @@ void readQueryFromClient(connection *conn) {
      * at the risk of requiring more read(2) calls. This way the function
      * processMultiBulkBuffer() can avoid copying buffers to create the
      * Redis Object representing the argument. */
+
+    /**
+     * 如果请求类型是bulk ，其实就是不是通过telnet 这种方式，而是代码层面的
+     */
     if (c->reqtype == PROTO_REQ_MULTIBULK && c->multibulklen && c->bulklen != -1
         && c->bulklen >= PROTO_MBULK_BIG_ARG)
     {
@@ -2159,10 +2195,10 @@ void readQueryFromClient(connection *conn) {
     qblen = sdslen(c->querybuf);
     if (c->querybuf_peak < qblen) c->querybuf_peak = qblen;
 
-    // 扩充
+    // 扩充客户端缓冲区大小
     c->querybuf = sdsMakeRoomFor(c->querybuf, readlen);
 
-    // 拼接
+    // 读取数据
     nread = connRead(c->conn, c->querybuf+qblen, readlen);
     if (nread == -1) {
         if (connGetState(conn) == CONN_STATE_CONNECTED) {
@@ -3361,6 +3397,12 @@ int checkClientPauseTimeoutAndReturnIfPaused(void) {
  * write, close sequence needed to serve a client.
  *
  * The function returns the total number of events processed. */
+
+/**
+ *
+ * 当 Redis 在读取 RDB 文件或是 AOF 文件时，这个函数会被调用，用来处理事件驱动框架捕获到的事件。
+ *
+ */
 void processEventsWhileBlocked(void) {
     int iterations = 4; /* See the function top-comment. */
 
@@ -3398,14 +3440,33 @@ void processEventsWhileBlocked(void) {
 #define IO_THREADS_OP_READ 0
 #define IO_THREADS_OP_WRITE 1
 
+/**
+ * 记录IO 线程的描述符
+ */
 pthread_t io_threads[IO_THREADS_MAX_NUM];
+
+
 pthread_mutex_t io_threads_mutex[IO_THREADS_MAX_NUM];
+
+
+/**
+ *
+ *  这里的客户端等待这被处理
+ */
 redisAtomic unsigned long io_threads_pending[IO_THREADS_MAX_NUM];
+
+
 int io_threads_op;      /* IO_THREADS_OP_WRITE or IO_THREADS_OP_READ. */
 
 /* This is the list of clients each thread will serve when threaded I/O is
  * used. We spawn io_threads_num-1 threads, since one is the main thread
  * itself. */
+
+/**
+ *
+ * IO 线程的任务列表。 消费是在IO 线程IOThreadMain 函数。
+ *  是把server.clients_pending_write 和 clients_pending_read 放到这里
+ */
 list *io_threads_list[IO_THREADS_MAX_NUM];
 
 static inline unsigned long getIOPendingCount(int i) {
@@ -3431,6 +3492,8 @@ void *IOThreadMain(void *myid) {
 
     while(1) {
         /* Wait for start */
+
+        // 延迟执行下面逻辑，保证主线程先获取得到锁pthread_mutex_lock
         for (int j = 0; j < 1000000; j++) {
             if (getIOPendingCount(id) != 0) break;
         }
@@ -3470,8 +3533,15 @@ void initThreadedIO(void) {
 
     /* Don't spawn any thread if the user selected a single thread:
      * we'll handle I/O directly from the main thread. */
+    /**
+     *
+     * 这里如果为 1，代表不开启多线程的IO 模式，只有一个主线程IO
+     */
     if (server.io_threads_num == 1) return;
 
+    /**
+     * IO 线程最大也不能超过 128
+     */
     if (server.io_threads_num > IO_THREADS_MAX_NUM) {
         serverLog(LL_WARNING,"Fatal: too many I/O threads configured. "
                              "The maximum number is %d.", IO_THREADS_MAX_NUM);
@@ -3540,6 +3610,14 @@ void stopThreadedIO(void) {
  * The function returns 0 if the I/O threading should be used because there
  * are enough active threads, otherwise 1 is returned and the I/O threads
  * could be possibly stopped (if already active) as a side effect. */
+/**
+ * 会判断 IO 线程数量是否为 1，或者待写客户端数量是否小于 IO 线程数量的 2 倍。如果这两个条件中有一个条件成立，
+ * 那么 handleClientsWithPendingWritesUsingThreads 函数就不会用多线程来处理客户端了，
+ * 而是会调用 handleClientsWithPendingWrites 函数由主 IO 线程直接处理待写客户端。
+ * 这样做的目的，主要是为了在待写客户端数量不多时，避免采用多线程，从而节省 CPU 开销。
+ *
+ * @return
+ */
 int stopThreadedIOIfNeeded(void) {
     int pending = listLength(server.clients_pending_write);
 
@@ -3554,6 +3632,11 @@ int stopThreadedIOIfNeeded(void) {
     }
 }
 
+/**
+ *
+ * 把 待写的clients_pending_write 数据放到io_threads_list 中
+ * @return
+ */
 int handleClientsWithPendingWritesUsingThreads(void) {
     int processed = listLength(server.clients_pending_write);
     if (processed == 0) return 0; /* Return ASAP if there are no clients. */
@@ -3634,17 +3717,36 @@ int handleClientsWithPendingWritesUsingThreads(void) {
     return processed;
 }
 
+/**
+ *
+ * 如果 return 1 ,则数据的读取 会在多线程IO 上处理，不会再主线程处理
+ * 如果 return 0,则在主线程处理
+ * @param c
+ * @return
+ */
 /* Return 1 if we want to handle the client read later using threaded I/O.
  * This is called by the readable handler of the event loop.
  * As a side effect of calling this function the client is put in the
  * pending read clients and flagged as such. */
 int postponeClientRead(client *c) {
     if (server.io_threads_active &&
+        //redis.conf ==> io-threads-do-reads ,默认不开启
         server.io_threads_do_reads &&
+
+        //ProcessingEventsWhileBlocked 当redis 服务端处理RDB,AOF 时，全局变量ProcessingEventsWhileBlocked 为1，
+        //这里 客户端的IO请求就不会延迟处理，直接返回，而不是放到clients_pending_read 列表中
         !ProcessingEventsWhileBlocked &&
+
+        //CLIENT_MASTER 和 CLIENT_SLAVE 标识分别表示客户端是用于主从复制的客户端，也就是说，这些客户端不会推迟读操作
+        //CLIENT_PENDING_READ 表示客户端本身已经被推迟了，就不用再次加入队列了
         !(c->flags & (CLIENT_MASTER|CLIENT_SLAVE|CLIENT_PENDING_READ)))
     {
         c->flags |= CLIENT_PENDING_READ;
+        /**
+         *
+         * 如果当前线程是IO 多线程，那么会把客户端放到 clients_pending_read 这个列表下
+         * 主线程IO 会在 handleClientsWithPendingReadsUsingThreads 函数下处理客户端发来的命令
+         */
         listAddNodeHead(server.clients_pending_read,c);
         return 1;
     } else {
@@ -3652,14 +3754,24 @@ int postponeClientRead(client *c) {
     }
 }
 
-/* When threaded I/O is also enabled for the reading + parsing side, the
+/*
+ *
+ * handleClientsWithPendingReadsUsingThreads 是在beforeSleep 前被调用
+ *
+ * When threaded I/O is also enabled for the reading + parsing side, the
  * readable handler will just put normal clients into a queue of clients to
  * process (instead of serving them synchronously). This function runs
  * the queue using the I/O threads, and process them in order to accumulate
  * the reads in the buffers, and also parse the first command available
  * rendering it in the client structures. */
+
+
 int handleClientsWithPendingReadsUsingThreads(void) {
-    if (!server.io_threads_active || !server.io_threads_do_reads) return 0;
+    //IO 线程是否已经激活，并开始多线程IO
+    if (!server.io_threads_active
+    || !server.io_threads_do_reads) return 0;
+
+    //查看待 read的长度，为0,返回
     int processed = listLength(server.clients_pending_read);
     if (processed == 0) return 0;
 
@@ -3668,8 +3780,10 @@ int handleClientsWithPendingReadsUsingThreads(void) {
     listNode *ln;
     listRewind(server.clients_pending_read,&li);
     int item_id = 0;
+
     while((ln = listNext(&li))) {
         client *c = listNodeValue(ln);
+        // 根据列表位置 ，进行取模运算，然后均匀的添加到IO 多线程中
         int target_id = item_id % server.io_threads_num;
         listAddNodeTail(io_threads_list[target_id],c);
         item_id++;
@@ -3677,6 +3791,11 @@ int handleClientsWithPendingReadsUsingThreads(void) {
 
     /* Give the start condition to the waiting threads, by setting the
      * start condition atomic var. */
+
+    /**
+     *
+     * 设置每个IO 线程要处理的任务数，io_threads_pending 数组，记录了要处理的数量
+     */
     io_threads_op = IO_THREADS_OP_READ;
     for (int j = 1; j < server.io_threads_num; j++) {
         int count = listLength(io_threads_list[j]);
@@ -3684,6 +3803,11 @@ int handleClientsWithPendingReadsUsingThreads(void) {
     }
 
     /* Also use the main thread to process a slice of clients. */
+
+    /**
+     *
+     *  这里主线程处理客户端，io_threads_list[0]的任务，本来就是主线程需要处理
+     */
     listRewind(io_threads_list[0],&li);
     while((ln = listNext(&li))) {
         client *c = listNodeValue(ln);
@@ -3692,6 +3816,11 @@ int handleClientsWithPendingReadsUsingThreads(void) {
     listEmpty(io_threads_list[0]);
 
     /* Wait for all the other threads to end their work. */
+
+    /**
+     * 主线程循环 等待 所有的其他小县城都处理好任务后，在返回，这里会空消耗，
+     * 比如可以采用java 一直的CoutDownLatch机子
+     */
     while(1) {
         unsigned long pending = 0;
         for (int j = 1; j < server.io_threads_num; j++)
@@ -3702,10 +3831,16 @@ int handleClientsWithPendingReadsUsingThreads(void) {
     /* Run the list of clients again to process the new buffers. */
     while(listLength(server.clients_pending_read)) {
         ln = listFirst(server.clients_pending_read);
+
         client *c = listNodeValue(ln);
         c->flags &= ~CLIENT_PENDING_READ;
         listDelNode(server.clients_pending_read,ln);
 
+
+        /**
+         *
+         *  这里用于处理，被多线程IO 处理的解析过的命令
+         */
         if (processPendingCommandsAndResetClient(c) == C_ERR) {
             /* If the client is no longer valid, we avoid
              * processing the client later. So we just go

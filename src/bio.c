@@ -91,6 +91,7 @@ void *bioProcessBackgroundJobs(void *arg);
 #define REDIS_THREAD_STACK_SIZE (1024*1024*4)
 
 /* Initialize the background system, spawning the thread. */
+
 void bioInit(void) {
     pthread_attr_t attr;
     pthread_t thread;
@@ -201,11 +202,18 @@ void *bioProcessBackgroundJobs(void *arg) {
         serverLog(LL_WARNING,
             "Warning: can't mask SIGALRM in bio.c thread: %s", strerror(errno));
 
+    /**
+     * 除了主线程，还有3个线程处理其他事情，
+     * 比如BIO_CLOSE_FILE 关闭文件，BIO_AOF_FSYNC aof 同步 BIO_LAZY_FREE 延迟删除数据
+     */
     while(1) {
         listNode *ln;
 
         /* The loop always starts with the lock hold. */
         if (listLength(bio_jobs[type]) == 0) {
+            /**
+             * IO 线程阻塞在这里，等待 条件变量唤醒，需要判断 是否有客户端的接入bio_jobs
+             */
             pthread_cond_wait(&bio_newjob_cond[type],&bio_mutex[type]);
             continue;
         }

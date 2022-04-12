@@ -37,7 +37,13 @@
 
 #define AE_OK 0
 #define AE_ERR -1
+/**
+   0000 ==>0
+   0001 ==>1
+   0010 ==>2
+   0100 ==>4
 
+**/
 #define AE_NONE 0       /* No events registered. */
 #define AE_READABLE 1   /* Fire when descriptor is readable. */
 #define AE_WRITABLE 2   /* Fire when descriptor is writable. */
@@ -47,6 +53,9 @@
                            things to disk before sending replies, and want
                            to do that in a group fashion. */
 
+/**
+ * 事件类型
+ */
 #define AE_FILE_EVENTS (1<<0)
 #define AE_TIME_EVENTS (1<<1)
 #define AE_ALL_EVENTS (AE_FILE_EVENTS|AE_TIME_EVENTS)
@@ -99,7 +108,7 @@ typedef struct aeFiredEvent {
 typedef struct aeEventLoop {
     /**
      *
-     * 下一个文件描述符
+     * 下一个文件描述符，当前正在处理的描述符
      */
     int maxfd;   /* highest file descriptor currently registered */
     /**

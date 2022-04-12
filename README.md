@@ -3,12 +3,12 @@ This README is just a fast *quick start* document. You can find more detailed do
 What is Redis?
 --------------
 
-Redis is often referred to as a *data structures* server. What this means is that Redis provides access to mutable data structures via a set of commands, which are sent using a *server-client* model with TCP sockets and a simple protocol. So different processes can query and modify the same data structures in a shared way.
+Redis is often referred to as a *data structures* server. What this means is that Redis provides access to mutable data structures(可变数据结构) via a set of commands, which are sent using a *server-client* model with TCP sockets and a simple protocol. So different processes can query and modify the same data structures in a shared way.
 
 Data structures implemented into Redis have a few special properties:
 
-* Redis cares to store them on disk, even if they are always served and modified into the server memory. This means that Redis is fast, but that it is also non-volatile.
-* The implementation of data structures emphasizes memory efficiency, so data structures inside Redis will likely use less memory compared to the same data structure modelled using a high-level programming language.
+* Redis cares to store them on disk, even if they are always served and modified into the server memory. This means that Redis is fast, but that it is also non-volatile.（非易失性的）
+* The implementation of data structures emphasizes（强调） memory efficiency, so data structures inside Redis will likely use less memory compared to the same data structure modelled using a high-level programming language.
 * Redis offers a number of features that are natural to find in a database, like replication, tunable levels of durability, clustering, and high availability.
 
 Another good example is to think of Redis as a more complex version of memcached, where the operations are not just SETs and GETs, but operations that work with complex data types like Lists, Sets, ordered data structures, and so forth.
@@ -35,7 +35,7 @@ It is as simple as:
 
     % make
 
-To build with TLS support, you'll need OpenSSL development libraries (e.g.
+To build with TLS（Transport Layer Security） support, you'll need OpenSSL development libraries (e.g.
 libssl-dev on Debian/Ubuntu) and run:
 
     % make BUILD_TLS=yes
@@ -119,15 +119,15 @@ Monotonic clock
 ---------------
 
 By default, Redis will build using the POSIX clock_gettime function as the
-monotonic clock source.  On most modern systems, the internal processor clock
+monotonic clock source（单调的时钟源）.  On most modern systems, the internal processor clock
 can be used to improve performance.  Cautions can be found here: 
     http://oliveryang.net/2015/09/pitfalls-of-TSC-usage/
 
-To build with support for the processor's internal instruction clock, use:
+To build with support for the processor's internal instruction clock （处理器内部的指令时钟）, use:
 
     % make CFLAGS="-DUSE_PROCESSOR_CLOCK"
 
-Verbose build
+Verbose （详细）build 
 -------------
 
 Redis will build with a user-friendly colorized output by default.
@@ -198,7 +198,7 @@ different destination.
 
 Make install will just install binaries in your system, but will not configure
 init scripts and configuration files in the appropriate place. This is not
-needed if you just want to play a bit with Redis, but if you are installing
+needed if you just want to play a bit with Redis （和redis 玩一会）, but if you are installing
 it the proper way for a production system, we have a script that does this
 for Ubuntu and Debian systems:
 
