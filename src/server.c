@@ -1115,33 +1115,58 @@ void nolocks_localtime(struct tm *tmp, time_t t, time_t tz, int dst);
 
 /* Low level logging. To use only for very big messages, otherwise
  * serverLog() is to prefer. */
+/**
+ * 原生日志打印
+ * @param level
+ * @param msg
+ */
 void serverLogRaw(int level, const char *msg) {
     const int syslogLevelMap[] = { LOG_DEBUG, LOG_INFO, LOG_NOTICE, LOG_WARNING };
     const char *c = ".-*#";
     FILE *fp;
     char buf[64];
+    // 判断是否是原生的模式
     int rawmode = (level & LL_RAW);
+
+    //如果服务器的日志文件没有，说明是标准输出
     int log_to_stdout = server.logfile[0] == '\0';
 
     level &= 0xff; /* clear flags */
+    //日志级别小于设置的，不打印
     if (level < server.verbosity) return;
 
+    // 打开日志文件
     fp = log_to_stdout ? stdout : fopen(server.logfile,"a");
     if (!fp) return;
 
+    // 是否是原生模式，通过 fprintf 打印
     if (rawmode) {
         fprintf(fp,"%s",msg);
-    } else {
+    } else {// 非原生模式，形成格式
+
         int off;
         struct timeval tv;
         int role_char;
+
+        //获取线程id
         pid_t pid = getpid();
 
+        //获取当前时间
         gettimeofday(&tv,NULL);
+
         struct tm tm;
+
+        // 设置时间，根据时区tm
         nolocks_localtime(&tm,tv.tv_sec,server.timezone,server.daylight_active);
+
+        // 打印时间到 buf
         off = strftime(buf,sizeof(buf),"%d %b %Y %H:%M:%S.",&tm);
+
+        //接着打印 时间毫秒数
         snprintf(buf+off,sizeof(buf)-off,"%03d",(int)tv.tv_usec/1000);
+
+
+        // 判断其角色
         if (server.sentinel_mode) {
             role_char = 'X'; /* Sentinel. */
         } else if (pid != server.pid) {
@@ -1149,12 +1174,17 @@ void serverLogRaw(int level, const char *msg) {
         } else {
             role_char = (server.masterhost ? 'S':'M'); /* Slave or Master. */
         }
+        //日志格式：
+        // 【进程ID】:【系统角色字符】 【日期】 【日志等级】【消息】
         fprintf(fp,"%d:%c %s %c %s\n",
             (int)getpid(),role_char, buf,c[level],msg);
     }
+    //日志刷新
     fflush(fp);
 
+    //关闭文件指针
     if (!log_to_stdout) fclose(fp);
+
     if (server.syslog_enabled) syslog(syslogLevelMap[level], "%s", msg);
 }
 
@@ -5588,6 +5618,10 @@ void daemonize(void) {
     /* Every output goes to /dev/null. If Redis is daemonized but
      * the 'logfile' is set to 'stdout' in the configuration file
      * it will not log at all. */
+
+    /**
+     * 把 标出输出，标出错误，保持输入 都指向fd 文件，就垃圾桶，即不输出数据
+     */
     if ((fd = open("/dev/null", O_RDWR, 0)) != -1) {
         dup2(fd, STDIN_FILENO);
         dup2(fd, STDOUT_FILENO);
@@ -6175,45 +6209,45 @@ int main(int argc, char **argv) {
     int j;
     char config_from_stdin = 0;
 
-#ifdef REDIS_TEST
-    if (argc >= 3 && !strcasecmp(argv[1], "test")) {
-        int accurate = 0;
-        for (j = 3; j < argc; j++) {
-            if (!strcasecmp(argv[j], "--accurate")) {
-                accurate = 1;
-            }
-        }
-
-        if (!strcasecmp(argv[2], "all")) {
-            int numtests = sizeof(redisTests)/sizeof(struct redisTest);
-            for (j = 0; j < numtests; j++) {
-                redisTests[j].failed = (redisTests[j].proc(argc,argv,accurate) != 0);
-            }
-
-            /* Report tests result */
-            int failed_num = 0;
-            for (j = 0; j < numtests; j++) {
-                if (redisTests[j].failed) {
-                    failed_num++;
-                    printf("[failed] Test - %s\n", redisTests[j].name);
-                } else {
-                    printf("[ok] Test - %s\n", redisTests[j].name);
-                }
-            }
-
-            printf("%d tests, %d passed, %d failed\n", numtests,
-                   numtests-failed_num, failed_num);
-
-            return failed_num == 0 ? 0 : 1;
-        } else {
-            redisTestProc *proc = getTestProcByName(argv[2]);
-            if (!proc) return -1; /* test not found */
-            return proc(argc,argv,accurate);
-        }
-
-        return 0;
-    }
-#endif
+//#ifdef REDIS_TEST
+//    if (argc >= 3 && !strcasecmp(argv[1], "test")) {
+//        int accurate = 0;
+//        for (j = 3; j < argc; j++) {
+//            if (!strcasecmp(argv[j], "--accurate")) {
+//                accurate = 1;
+//            }
+//        }
+//
+//        if (!strcasecmp(argv[2], "all")) {
+//            int numtests = sizeof(redisTests)/sizeof(struct redisTest);
+//            for (j = 0; j < numtests; j++) {
+//                redisTests[j].failed = (redisTests[j].proc(argc,argv,accurate) != 0);
+//            }
+//
+//             Report tests result
+//            int failed_num = 0;
+//            for (j = 0; j < numtests; j++) {
+//                if (redisTests[j].failed) {
+//                    failed_num++;
+//                    printf("[failed] Test - %s\n", redisTests[j].name);
+//                } else {
+//                    printf("[ok] Test - %s\n", redisTests[j].name);
+//                }
+//            }
+//
+//            printf("%d tests, %d passed, %d failed\n", numtests,
+//                   numtests-failed_num, failed_num);
+//
+//            return failed_num == 0 ? 0 : 1;
+//        } else {
+//            redisTestProc *proc = getTestProcByName(argv[2]);
+//            if (!proc) return -1;  test not found
+//            return proc(argc,argv,accurate);
+//        }
+//
+//        return 0;
+//    }
+//#endif
 
     /* We need to initialize our libraries, and the server configuration. */
 #ifdef INIT_SETPROCTITLE_REPLACEMENT
@@ -6238,7 +6272,9 @@ int main(int argc, char **argv) {
      * to reset it and restore it back. We do this early to avoid a potential
      * race condition with threads that could be creating files or directories.
      */
-    //在使用open()建立新文件时，该参数mode并非真正建立文件的权限，而是(mode&~umask)的权限值。例如，在建立文件时指定文件权限为0666,通常umask值默认为022,则该文件的真正权限则为0666&~022=0644,也就是rw-r-r--。
+    //在使用open()建立新文件时，该参数mode并非真正建立文件的权限，
+    // 而是(mode&~umask)的权限值。例如，在建立文件时指定文件权限为0666,
+    // 通常umask值默认为022,则该文件的真正权限则为0666&~022=0644,也就是rw-r-r--。
     umask(server.umask = umask(0777));
 
     uint8_t hashseed[16];

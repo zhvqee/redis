@@ -616,6 +616,11 @@ void persistCommand(client *c) {
 }
 
 /* TOUCH key1 [key2 key3 ... keyN] */
+/**
+ *
+ * touch 可以把已存在的 key ，修改最后访问时间
+ * @param c
+ */
 void touchCommand(client *c) {
     int touched = 0;
     for (int j = 1; j < c->argc; j++)

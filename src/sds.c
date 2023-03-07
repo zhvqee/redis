@@ -64,12 +64,22 @@ static inline char sdsReqType(size_t string_size) {
         return SDS_TYPE_8;
     if (string_size < 1<<16)
         return SDS_TYPE_16;
-#if (LONG_MAX == LLONG_MAX)
+    // 宏LONG_MAX和LLONG_MAX均存在与头文件limits.h中，分别表示long int 和long long int类型的最大值
+    //1、32位编译系统中:
+    //long 占4字节 int 占4字节 long int 占4字节
+
+    //2、64位编译系统中:
+    //long 占8字节 int 占4字节 long int 占8字节
+
+    //3、32位和64位编译系统中
+    //long long int 在32位和64位编译系统中，都占8字节
+
+#if (LONG_MAX == LLONG_MAX) // 如果是64位系统
     if (string_size < 1ll<<32)
         return SDS_TYPE_32;
     return SDS_TYPE_64;
 #else
-    return SDS_TYPE_32;
+    return SDS_TYPE_32; //否则是32位系统直接32
 #endif
 }
 
@@ -270,6 +280,7 @@ sds sdsMakeRoomFor(sds s, size_t addlen) {
     hdrlen = sdsHdrSize(type);
     assert(hdrlen + newlen + 1 > len);  /* Catch size_t overflow */
     if (oldtype==type) {
+        // 扩展分配
         newsh = s_realloc_usable(sh, hdrlen+newlen+1, &usable);
         if (newsh == NULL) return NULL;
         s = (char*)newsh+hdrlen;
@@ -297,6 +308,12 @@ sds sdsMakeRoomFor(sds s, size_t addlen) {
  *
  * After the call, the passed sds string is no longer valid and all the
  * references must be substituted with the new pointer returned by the call. */
+
+/**
+ * 移除 空闲空间
+ * @param s
+ * @return
+ */
 sds sdsRemoveFreeSpace(sds s) {
     void *sh, *newsh;
     char type, oldtype = s[-1] & SDS_TYPE_MASK;

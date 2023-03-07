@@ -161,6 +161,8 @@ int _dictExpand(dict *d, unsigned long size, int *malloc_failed) {
         return DICT_ERR;
 
     dictht n; /* the new hash table */
+
+    // 扩充桶的数量： 4，8，16，32大小的扩充
     unsigned long realsize = _dictNextPower(size);
 
     /* Rehashing to the same table size is not useful. */
@@ -309,6 +311,13 @@ static void _dictRehashStep(dict *d) {
     if (d->pauserehash == 0) dictRehash(d, 1);
 }
 
+/**
+ * 只添加，如果已存在，添加失败
+ * @param d
+ * @param key
+ * @param val
+ * @return
+ */
 /* Add an element to the target hash table */
 int dictAdd(dict *d, void *key, void *val) {
     dictEntry *entry = dictAddRaw(d, key, NULL);
@@ -336,16 +345,30 @@ int dictAdd(dict *d, void *key, void *val) {
  *
  * If key was added, the hash entry is returned to be manipulated by the caller.
  */
+
+/**
+ *
+ *
+ *
+ * @param d
+ * @param key
+ * @param existing
+ * @return
+ */
 dictEntry *dictAddRaw(dict *d, void *key, dictEntry **existing) {
     long index;
     dictEntry *entry;
     dictht *ht;
 
-    //rehash
+    //如果进行rehash 中，则rehash 一次
     if (dictIsRehashing(d)) _dictRehashStep(d);
 
     /* Get the index of the new element, or -1 if
      * the element already exists. */
+
+    /**
+     * 查找key 是否在，如果返回-1，说明元素已存在
+     */
     if ((index = _dictKeyIndex(d, key, dictHashKey(d, key), existing)) == -1)
         return NULL;
 
@@ -353,6 +376,10 @@ dictEntry *dictAddRaw(dict *d, void *key, dictEntry **existing) {
      * Insert the element in top, with the assumption that in a database
      * system it is more likely that recently added entries are accessed
      * more frequently. */
+
+    /**
+     * 头部插入节点
+     */
     ht = dictIsRehashing(d) ? &d->ht[1] : &d->ht[0];
     entry = zmalloc(sizeof(*entry));
     entry->next = ht->table[index];
@@ -364,7 +391,9 @@ dictEntry *dictAddRaw(dict *d, void *key, dictEntry **existing) {
     return entry;
 }
 
-/* Add or Overwrite:
+/*
+ * 添加（key,value）/或者覆盖
+ * Add or Overwrite:
  * Add an element, discarding the old value if the key already exists.
  * Return 1 if the key was added from scratch, 0 if there was already an
  * element with such key and dictReplace() just performed a value update
@@ -374,6 +403,8 @@ int dictReplace(dict *d, void *key, void *val) {
 
     /* Try to add the element. If the key
      * does not exists dictAdd will succeed. */
+    // 如果 key 不在hashtable 上，则添加成功，
+    //否则添加失败，返回NUll
     entry = dictAddRaw(d, key, &existing);
     if (entry) {
         dictSetVal(d, entry, val);
@@ -385,8 +416,22 @@ int dictReplace(dict *d, void *key, void *val) {
      * as the previous one. In this context, think to reference counting,
      * you want to increment (set), and then decrement (free), and not the
      * reverse. */
+
+    /**
+     *
+     * 设置新值并释放旧值。
+     * 请注意，按此顺序执行是很重要的，因为该值可能与前一个值完全相同。
+     * 在这个上下文中，考虑引用计数，您想要递增(set)，然后递减(free)，而不是相反。
+     */
+
+    //这里实际是赋值了一份entry,然后val 如果是指针的话，
+    // 会指向同一个位置，所以在dictFreeVal最后释放的还是当时的val
     auxentry = *existing;
+
+    //设置新值
     dictSetVal(d, existing, val);
+
+    //free
     dictFreeVal(d, &auxentry);
     return 0;
 }
@@ -809,7 +854,20 @@ dictEntry *dictGetFairRandomKey(dict *d) {
     unsigned int idx = rand() % count;
     return entries[idx];
 }
-
+/**
+ *  rev 的结果是
+ *  例子 v=8
+ *  1000,{0剩余} 剩余位数0补充
+ *  v=7
+ *  111,{0剩余} 剩余位数0补充
+ *
+ *  v=2,
+ *  10,{0剩余位数0补充}
+ *
+ *
+ * @param v
+ * @return
+ */
 /* Function to reverse bits. Algorithm from:
  * http://graphics.stanford.edu/~seander/bithacks.html#ReverseParallel */
 static unsigned long rev(unsigned long v) {
@@ -822,7 +880,20 @@ static unsigned long rev(unsigned long v) {
     return v;
 }
 
-/* dictScan() is used to iterate over the elements of a dictionary.
+/*
+ * dictscan() 用于扫描hash table
+ * 1) 开始游标cursor=0;
+ * 2) 该函数完成一次迭代，返回一个cursor，用于下次迭代
+ * 3）若 cursor=0 返回，说明迭代完成
+ *
+ * 保证所有的元素全部返回，但是某些元素可能返回多次
+ *
+ * 迭代算法由Pieter Noordhuis设计。
+ * 主要思想是从高阶位开始递增游标。
+ * 也就是说，与正常的递增游标不同，先把游标的位反转，
+ * 然后再递增，最后再把位反转。
+ *
+ * dictScan() is used to iterate over the elements of a dictionary.
  *
  * Iterating works the following way:
  *
@@ -856,6 +927,9 @@ static unsigned long rev(unsigned long v) {
  * (where SIZE-1 is always the mask that is equivalent to taking the rest
  *  of the division between the Hash of the key and SIZE).
  *
+ *
+ * 由于size=16, mask=16-1=1111(2进制),
+ * 键在哈希表中的位置将始终是哈希输出的最后四位，依此类推
  * For example if the current hash table size is 16, the mask is
  * (in binary) 1111. The position of a key in the hash table will always be
  * the last four bits of the hash output, and so forth.
@@ -915,19 +989,25 @@ unsigned long dictScan(dict *d,
     const dictEntry *de, *next;
     unsigned long m0, m1;
 
+    // 如果hash 为空，直接返回
     if (dictSize(d) == 0) return 0;
 
+    // 扫描时，先暂停rehash
     /* This is needed in case the scan callback tries to do dictFind or alike. */
     dictPauseRehashing(d);
 
+
+    //如果之前 未在进行rehash.
     if (!dictIsRehashing(d)) {
         t0 = &(d->ht[0]);
         m0 = t0->sizemask;
 
         /* Emit entries at cursor */
         if (bucketfn) bucketfn(privdata, &t0->table[v & m0]);
+
+        //拿到指定v 索引下的 桶 Entry
         de = t0->table[v & m0];
-        while (de) {
+        while (de) { // 然后收集，一个桶下的链表
             next = de->next;
             fn(privdata, de);
             de = next;
@@ -935,6 +1015,19 @@ unsigned long dictScan(dict *d,
 
         /* Set unmasked bits so incrementing the reversed cursor
          * operates on the masked bits */
+       /**
+        *  比如最大位数为16位，
+        *  size 16, 00000000,00010000
+        *  mask 15, 00000000,00001111
+        *  例子：
+        *  比如
+        *  v=7 ,       00000000,00000111,
+        *  ~mask,      11111111,11110000,
+        *  v|=~m0,     11111111,11110111,
+        *  v=rev(v),   11101111,11111111,
+        *  v++,        11110000,00000000,
+        *  v=rev(v),   00000000,00001111,
+        */
         v |= ~m0;
 
         /* Increment the reverse cursor */
@@ -954,9 +1047,11 @@ unsigned long dictScan(dict *d,
 
         m0 = t0->sizemask;
         m1 = t1->sizemask;
+        // 上面 保证 t1.size > t0.size
 
         /* Emit entries at cursor */
         if (bucketfn) bucketfn(privdata, &t0->table[v & m0]);
+        //拿到指定v 索引下的 桶 Entry，收集
         de = t0->table[v & m0];
         while (de) {
             next = de->next;
@@ -983,6 +1078,7 @@ unsigned long dictScan(dict *d,
             v = rev(v);
 
             /* Continue while bits covered by mask difference is non-zero */
+        //v的最高位为1。
         } while (v & (m0 ^ m1));
     }
 
@@ -1003,18 +1099,36 @@ static int dictTypeExpandAllowed(dict *d) {
             (double) d->ht[0].used / d->ht[0].size);
 }
 
+/**
+ * 扩充 hash
+ *
+ *
+ * @param d
+ * @return
+ */
 /* Expand the hash table if needed */
 static int _dictExpandIfNeeded(dict *d) {
     /* Incremental rehashing already in progress. Return. */
-    if (dictIsRehashing(d)) return DICT_OK;
-
+    //1、rehash 中不进行扩充
+    if (dictIsRehashing(d))
+        return DICT_OK;
+    //如果hash table 的桶大小为0，说明是初始化，
+    //则进行扩充大小为4
     /* If the hash table is empty expand it to the initial size. */
-    if (d->ht[0].size == 0) return dictExpand(d, DICT_HT_INITIAL_SIZE);
+    if (d->ht[0].size == 0)
+        return dictExpand(d, DICT_HT_INITIAL_SIZE);
 
     /* If we reached the 1:1 ratio, and we are allowed to resize the hash
      * table (global setting) or we should avoid it but the ratio between
      * elements/buckets is over the "safe" threshold, we resize doubling
      * the number of buckets. */
+    /**
+     * 1、如果hash中存储节点的数量 > 桶的数量
+     * 2、函数判断是否允许扩充
+     * 3、节点的数量/桶的数量 > resize_ratio
+     *
+     */
+
     if (d->ht[0].used >= d->ht[0].size &&
         (dict_can_resize ||
          d->ht[0].used / d->ht[0].size > dict_force_resize_ratio) &&
@@ -1045,7 +1159,7 @@ static unsigned long _dictNextPower(unsigned long size) {
  * index is always returned in the context of the second (new) hash table. */
 
 /**
- *
+ * 查找key,如果 存在返回-1，否则返回正确的slot
  * 查找 一个空闲的slot
  * @param d
  * @param key
@@ -1062,6 +1176,7 @@ static long _dictKeyIndex(dict *d, const void *key, uint64_t hash, dictEntry **e
     //扩充hash表
     if (_dictExpandIfNeeded(d) == DICT_ERR)
         return -1;
+    //进行2个hash表进行查找
     for (table = 0; table <= 1; table++) {
         idx = hash & d->ht[table].sizemask;
         /* Search if this slot does not already contain the given key */
@@ -1073,6 +1188,7 @@ static long _dictKeyIndex(dict *d, const void *key, uint64_t hash, dictEntry **e
             }
             he = he->next;
         }
+        // 如果不是正在hash 则不需要扫描2个表
         if (!dictIsRehashing(d)) break;
     }
     return idx;

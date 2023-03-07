@@ -422,6 +422,18 @@ static int processTimeEvents(aeEventLoop *eventLoop) {
  * The function returns the number of events processed. */
 
 // 返回处理数量
+
+/**
+ *   在main 函数调用 flags 值
+ *      AE_ALL_EVENTS|
+        AE_CALL_BEFORE_SLEEP|
+        AE_CALL_AFTER_SLEEP
+ *
+ *
+ * @param eventLoop
+ * @param flags
+ * @return
+ */
 int aeProcessEvents(aeEventLoop *eventLoop, int flags)
 {
     int processed = 0, numevents;
@@ -440,9 +452,8 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
      * 请注意，即使没有文件事件需要处理，只要要处理时间事件，我们也要调用select()，
      * 以便休眠，直到下一次事件准备好触发
      */
-    if (eventLoop->maxfd != -1 ||
-            //时间时间
-        ((flags & AE_TIME_EVENTS) && !(flags & AE_DONT_WAIT))) {
+    if (eventLoop->maxfd != -1 ||((flags & AE_TIME_EVENTS) && !(flags & AE_DONT_WAIT))) {
+
         int j;
         struct timeval tv, *tvp;
         long msUntilTimer = -1;
@@ -607,6 +618,10 @@ int aeWait(int fd, int mask, long long milliseconds) {
     }
 }
 
+/**
+ * 死循环
+ * @param eventLoop
+ */
 void aeMain(aeEventLoop *eventLoop) {
     eventLoop->stop = 0;
     while (!eventLoop->stop) {

@@ -47,6 +47,9 @@
 /* Unused arguments generate annoying warnings... */
 #define DICT_NOTUSED(V) ((void) V)
 
+/**
+ * hash table 中的Entry结构
+ */
 typedef struct dictEntry {
     void *key;
     union {
@@ -70,6 +73,12 @@ typedef struct dictType {
 
 /* This is our hash table structure. Every dictionary has two of this as we
  * implement incremental rehashing, for the old to the new table. */
+
+//hash table,
+// **table指针就是一个二级指针数组
+//数组大小为size,即桶的数量
+// 大小掩码为sizemask ,为size-1;
+//used hash table 节点Entry数量
 typedef struct dictht {
     dictEntry **table;
     unsigned long size;
@@ -77,6 +86,10 @@ typedef struct dictht {
     unsigned long used;
 } dictht;
 
+// redis 字典有2个hash table ,用于rehash
+// rehashidx rehash 桶索引，如果没有进行rehash，则为-1
+// pauserehash 说明rehash 被暂停
+// 字典类型dictType
 typedef struct dict {
     dictType *type;
     void *privdata;
@@ -89,6 +102,8 @@ typedef struct dict {
  * dictAdd, dictFind, and other functions against the dictionary even while
  * iterating. Otherwise it is a non safe iterator, and only dictNext()
  * should be called while iterating. */
+
+// 迭代器Iterator
 typedef struct dictIterator {
     dict *d;
     long index;
@@ -109,6 +124,7 @@ typedef void (dictScanBucketFunction)(void *privdata, dictEntry **bucketref);
     if ((d)->type->valDestructor) \
         (d)->type->valDestructor((d)->privdata, (entry)->v.val)
 
+// 设置 字典的entry ->value
 #define dictSetVal(d, entry, _val_) do { \
     if ((d)->type->valDup) \
         (entry)->v.val = (d)->type->valDup((d)->privdata, _val_); \
@@ -116,12 +132,14 @@ typedef void (dictScanBucketFunction)(void *privdata, dictEntry **bucketref);
         (entry)->v.val = (_val_); \
 } while(0)
 
+// 设置有符号整数entry.value
 #define dictSetSignedIntegerVal(entry, _val_) \
     do { (entry)->v.s64 = _val_; } while(0)
 
+// 设置无符号整数
 #define dictSetUnsignedIntegerVal(entry, _val_) \
     do { (entry)->v.u64 = _val_; } while(0)
-
+// 设置double entry
 #define dictSetDoubleVal(entry, _val_) \
     do { (entry)->v.d = _val_; } while(0)
 
@@ -129,6 +147,7 @@ typedef void (dictScanBucketFunction)(void *privdata, dictEntry **bucketref);
     if ((d)->type->keyDestructor) \
         (d)->type->keyDestructor((d)->privdata, (entry)->key)
 
+//设置key
 #define dictSetKey(d, entry, _key_) do { \
     if ((d)->type->keyDup) \
         (entry)->key = (d)->type->keyDup((d)->privdata, _key_); \
@@ -147,7 +166,11 @@ typedef void (dictScanBucketFunction)(void *privdata, dictEntry **bucketref);
 #define dictGetSignedIntegerVal(he) ((he)->v.s64)
 #define dictGetUnsignedIntegerVal(he) ((he)->v.u64)
 #define dictGetDoubleVal(he) ((he)->v.d)
+
+// 获取桶的大小，双桶之和
 #define dictSlots(d) ((d)->ht[0].size+(d)->ht[1].size)
+
+//hash 数量
 #define dictSize(d) ((d)->ht[0].used+(d)->ht[1].used)
 #define dictIsRehashing(d) ((d)->rehashidx != -1)
 #define dictPauseRehashing(d) (d)->pauserehash++
@@ -268,6 +291,15 @@ int dictRehashMilliseconds(dict *d, int ms);
 
 void dictSetHashFunctionSeed(uint8_t *seed);
 uint8_t *dictGetHashFunctionSeed(void);
+/**
+ * scan 扫描
+ * @param d
+ * @param v
+ * @param fn
+ * @param bucketfn
+ * @param privdata
+ * @return
+ */
 unsigned long dictScan(dict *d, unsigned long v, dictScanFunction *fn, dictScanBucketFunction *bucketfn, void *privdata);
 uint64_t dictGetHash(dict *d, const void *key);
 dictEntry **dictFindEntryRefByPtrAndHash(dict *d, const void *oldptr, uint64_t hash);

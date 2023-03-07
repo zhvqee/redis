@@ -861,8 +861,15 @@ int parseScanCursorOrReply(client *c, robj *o, unsigned long *cursor) {
     return C_OK;
 }
 
-/* This command implements SCAN, HSCAN and SSCAN commands.
+/*
+ * scan, hscan , sscan,扫描底层实现
+ * o is null 查找db
+ *
+ *
+ * This command implements SCAN, HSCAN and SSCAN commands.
  * If object 'o' is passed, then it must be a Hash, Set or Zset object, otherwise
+ *
+ *
  * if 'o' is NULL the command will operate on the dictionary associated with
  * the current database.
  *
@@ -884,6 +891,9 @@ void scanGenericCommand(client *c, robj *o, unsigned long cursor) {
 
     /* Object must be NULL (to iterate keys names), or the type of the object
      * must be Set, Sorted Set, or Hash. */
+    /**
+     * assert o type
+     */
     serverAssert(o == NULL || o->type == OBJ_SET || o->type == OBJ_HASH ||
                 o->type == OBJ_ZSET);
 
